@@ -1,0 +1,4 @@
+/api/review-photo  /.netlify/functions/review-photo  200
+/api/estimate-meal  /.netlify/functions/estimate-meal  200
+/api/goal-coach  /.netlify/functions/goal-coach  200
+/*    /index.html   200

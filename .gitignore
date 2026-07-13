@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.netlify/
+ios/App/Pods/
+ios/App/App/public/
+*.log
+.DS_Store

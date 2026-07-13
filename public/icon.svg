@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0B0B0F"/>
+  <rect x="40" y="40" width="432" height="432" rx="96" fill="#111118"/>
+  <text x="256" y="238" font-family="Arial Black, Helvetica, sans-serif" font-weight="900" font-size="150" fill="#FF3B30" text-anchor="middle" dominant-baseline="central">YOU</text>
+  <text x="256" y="366" font-family="Arial Black, Helvetica, sans-serif" font-weight="900" font-size="76" letter-spacing="10" fill="#F5F5F7" text-anchor="middle" dominant-baseline="central">MODE</text>
+</svg>

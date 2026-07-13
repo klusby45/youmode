@@ -1,0 +1,109 @@
+// Meal macro estimation for body-goal users: reads the meal photo(s) + the
+// member's one-line caption and estimates protein + calories. Estimates feed
+// the daily rollup — awareness numbers, not gospel; weekly weigh-ins are the
+// ground truth that self-corrects the plan.
+//
+// Env: SUPABASE_URL, SUPABASE_SERVICE_KEY, ANTHROPIC_API_KEY
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
+const CORS = {
+  'Access-Control-Allow-Origin': '*', // auth is enforced via the Supabase JWT below
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+// Handle the preflight and stamp CORS on every response so the app can call
+// this cross-origin (the dev preview points at the deployed function).
+export default async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
+  const res = await handle(req)
+  for (const [k, v] of Object.entries(CORS)) res.headers.set(k, v)
+  return res
+}
+
+async function handle(req) {
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
+  const SUPABASE_URL = process.env.SUPABASE_URL
+  const SERVICE = process.env.SUPABASE_SERVICE_KEY
+  const ANTHROPIC = process.env.ANTHROPIC_API_KEY
+  if (!SUPABASE_URL || !SERVICE || !ANTHROPIC) {
+    return Response.json({ skipped: 'not configured' }, { status: 200 })
+  }
+
+  try {
+    const { entryId } = await req.json()
+    if (!entryId) return Response.json({ error: 'entryId required' }, { status: 400 })
+
+    // Caller must be a real signed-in user who owns the entry.
+    const jwt = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    if (!jwt) return Response.json({ error: 'auth required' }, { status: 401 })
+    const uRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SERVICE, Authorization: `Bearer ${jwt}` },
+    })
+    if (!uRes.ok) return Response.json({ error: 'invalid session' }, { status: 401 })
+    const user = await uRes.json()
+
+    const svc = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` }
+    const eRes = await fetch(`${SUPABASE_URL}/rest/v1/log_entries?id=eq.${entryId}&select=*,requirements(*)`, { headers: svc })
+    const [entry] = await eRes.json()
+    if (!entry) return Response.json({ error: 'entry not found' }, { status: 404 })
+    if (entry.user_id !== user.id) return Response.json({ error: 'not your entry' }, { status: 403 })
+
+    // Only for members with a body plan, on photo entries.
+    const pRes = await fetch(`${SUPABASE_URL}/rest/v1/body_plans?user_id=eq.${entry.user_id}&select=id`, { headers: svc })
+    const plans = await pRes.json()
+    if (!plans.length) return Response.json({ skipped: 'no body plan' }, { status: 200 })
+    const paths = entry.photo_paths?.length ? entry.photo_paths : (entry.photo_path ? [entry.photo_path] : [])
+    if (!paths.length && !entry.caption) return Response.json({ skipped: 'nothing to estimate' }, { status: 200 })
+
+    const photoUrls = []
+    for (const p of paths.slice(0, 4)) {
+      const sRes = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/proof/${p}`, {
+        method: 'POST', headers: { ...svc, ...JSON_HEADERS }, body: JSON.stringify({ expiresIn: 300 }),
+      })
+      const signed = await sRes.json()
+      if (signed?.signedURL) photoUrls.push(`${SUPABASE_URL}/storage/v1${signed.signedURL}`)
+    }
+
+    const aRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        system:
+          'You estimate nutrition from a meal photo and the eater\'s one-line description. ' +
+          'The description is AUTHORITATIVE for what the meal is and the quantities — if it says "6 eggs", estimate 6 eggs even if the photo makes portions hard to judge. ' +
+          'Use the photo only to fill in items the description omits and to catch wild mismatches (description says steak, photo shows salad — then estimate the photo). ' +
+          'Use standard nutrition values (e.g. 1 large egg ≈ 6g protein / 75 cal). ' +
+          'Respond with ONLY strict JSON: {"protein_g": <int>, "calories": <int>}',
+        messages: [{
+          role: 'user',
+          content: [
+            ...photoUrls.map((u) => ({ type: 'image', source: { type: 'url', url: u } })),
+            { type: 'text', text: `Meal: "${entry.requirements?.label || 'meal'}". Description: "${entry.caption || '(none — estimate from photo only)'}". Estimate protein (g) and calories.` },
+          ],
+        }],
+      }),
+    })
+    if (!aRes.ok) return Response.json({ skipped: 'ai unavailable' }, { status: 200 })
+    const ai = await aRes.json()
+    const text = ai?.content?.find((b) => b.type === 'text')?.text || ''
+    let est = {}
+    try { est = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}') } catch { /* skip */ }
+    const protein = Number.isFinite(est.protein_g) ? Math.max(0, Math.min(300, Math.round(est.protein_g))) : null
+    const calories = Number.isFinite(est.calories) ? Math.max(0, Math.min(4000, Math.round(est.calories))) : null
+    if (protein == null && calories == null) return Response.json({ skipped: 'unparseable estimate' }, { status: 200 })
+
+    await fetch(`${SUPABASE_URL}/rest/v1/log_entries?id=eq.${entryId}`, {
+      method: 'PATCH',
+      headers: { ...svc, ...JSON_HEADERS, Prefer: 'return=minimal' },
+      body: JSON.stringify({ est_protein: protein, est_calories: calories }),
+    })
+    return Response.json({ ok: true, protein, calories })
+  } catch (e) {
+    return Response.json({ skipped: String(e?.message || e) }, { status: 200 })
+  }
+}
+
+export const config = { path: '/api/estimate-meal' }
