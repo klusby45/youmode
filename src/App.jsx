@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { Capacitor } from '@capacitor/core'
 import * as api from './data.js'
 import { todayInTz, currentDayNumber, summarize, deriveFormat } from './lib/challenge.js'
 import { getStoredTheme, applyTheme, normalizeTheme, mapAccent } from './theme.js'
@@ -6,6 +7,7 @@ import { copyFor, getStoredTone, storeTone, normalizeTone } from './copy.js'
 import { AppCtx, useApp } from './appContext.js'
 import Icon from './components/Icons.jsx'
 import YouSheet from './components/YouSheet.jsx'
+import Landing from './components/Landing.jsx'
 import Login from './components/Login.jsx'
 import Onboard from './components/Onboard.jsx'
 import Today from './components/Today.jsx'
@@ -27,8 +29,11 @@ export default function App() {
   const [tone, setToneState] = useState(getStoredTone)
   const [youOpen, setYouOpen] = useState(false)
 
-  useEffect(() => { applyTheme(theme) }, [theme])
-  useEffect(() => { storeTone(tone) }, [tone])
+  // Gate on userId: logged-out visitors keep the sunrise boot paint, and a
+  // fresh visitor's mount must NOT persist 'midnight' to localStorage (that
+  // would kill the sunrise first paint on their next visit).
+  useEffect(() => { if (userId) applyTheme(theme) }, [theme, userId])
+  useEffect(() => { if (userId) storeTone(tone) }, [tone, userId])
   useEffect(() => {
     const t = bundle?.profile?.theme
     if (t && normalizeTheme(t) === t && t !== theme) setThemeState(t)
@@ -191,11 +196,19 @@ export default function App() {
   }
 
   if (!userId) {
+    // Web visitors get the marketing landing; the native app opens straight
+    // on the (sunrise-styled) auth card, as App Store apps should.
     return (
       <>
         <style>{THEME}</style>
-        <div className="app-bg" />
-        <Login onAuthed={onAuthed} />
+        {Capacitor.isNativePlatform() ? (
+          <div className="sun-scope">
+            <div className="sun-bg" />
+            <Login onAuthed={onAuthed} initialMode="signin" />
+          </div>
+        ) : (
+          <Landing onAuthed={onAuthed} />
+        )}
       </>
     )
   }
@@ -226,8 +239,8 @@ export default function App() {
     return (
       <>
         <style>{THEME}</style>
-        <div className="app-bg" />
-        <Onboard profile={bundle.profile} onDone={() => refresh()} signOut={signOut} />
+        <Onboard profile={bundle.profile} onDone={() => refresh()} signOut={signOut}
+          theme={theme} tone={tone} pickTheme={pickTheme} pickTone={pickTone} />
       </>
     )
   }
@@ -367,6 +380,14 @@ const THEME = `
   --gc-face1:#16251b; --gc-face2:#0b140e; --gc-star:rgba(200,255,215,.95);
   --display:'Anton',sans-serif; --cond:'Oswald',sans-serif; --sans:'Inter',sans-serif;
   --r:18px; --r-sm:12px;
+  /* ── Sunrise: first-impression brand (landing/auth/onboard ONLY). Scoped on
+     purpose — never overridden per colorway, never consumed by in-app CSS. */
+  --sun-bg:#130C08; --sun-card:#1E1410; --sun-line:rgba(255,214,190,.14);
+  --sun-text:#FBF1E9; --sun-muted:#C9B2A4;
+  --sun-brand:#FF7A55; --sun-brand-deep:#FF6B4A; --sun-amber:#FFB25C; --sun-gold:#FFD9A8;
+  --sun-on-cta:#2A130B;
+  --sun-glow-a:rgba(255,107,74,.30); --sun-glow-b:rgba(255,178,92,.16);
+  --sun-grain-o:0.04;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body,#root{margin:0;min-height:100%;background:var(--bg)}
@@ -386,6 +407,29 @@ img{display:block;max-width:100%}
   radial-gradient(120% 70% at 50% -10%, var(--glow-1) 0%, var(--glow-fade) 55%),
   radial-gradient(90% 60% at 100% 0%, var(--glow-2) 0%, var(--glow-fade) 50%),
   var(--bg);}
+
+/* ── Sunrise backdrop: landing, auth, guided start only ──
+   z-index 0 (not -1) so it covers the colorway's #root background (e.g. a
+   Sand user signing out, or picking a theme mid-onboarding); every other
+   .sun-scope child is lifted above it. */
+.sun-bg{position:fixed;inset:0;z-index:0;background:var(--sun-bg);overflow:hidden}
+.sun-scope > *:not(.sun-bg){position:relative;z-index:1}
+.sun-bg::before{content:'';position:absolute;inset:-20%;
+  background:
+    radial-gradient(90% 55% at 50% 108%, var(--sun-glow-a), transparent 62%),
+    radial-gradient(70% 40% at 72% 96%, var(--sun-glow-b), transparent 60%);
+  animation:sun-drift 26s ease-in-out infinite alternate;will-change:transform,opacity}
+@keyframes sun-drift{
+  0%{transform:translate3d(-2.5%,1.5%,0) scale(1);opacity:.85}
+  100%{transform:translate3d(2.5%,-1.5%,0) scale(1.06);opacity:1}}
+.sun-bg::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:var(--sun-grain-o);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.lp-reveal{opacity:0;transform:translateY(14px);animation:sun-rise .7s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes sun-rise{to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){
+  .sun-bg::before{animation:none}
+  .lp-reveal{animation:none;opacity:1;transform:none}
+}
 
 .splash{height:100vh;display:flex;align-items:center;justify-content:center}
 .splash-mark{font-family:var(--display);font-size:64px;color:var(--brand);letter-spacing:2px;
@@ -860,6 +904,64 @@ img{display:block;max-width:100%}
   background:var(--red);color:var(--on-red);font-size:10px;font-family:var(--sans);font-weight:700;display:grid;place-items:center;padding:0 4px}
 
 /* login + onboarding */
+/* ── Sunrise landing page (logged-out web visitors) ── */
+.lp{max-width:600px;margin:0 auto;padding:0 22px calc(30px + env(safe-area-inset-bottom));color:var(--sun-text)}
+.lp-top{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;
+  padding:calc(12px + env(safe-area-inset-top)) 2px 12px;margin:0 -22px;padding-left:22px;padding-right:22px;
+  background:color-mix(in srgb, var(--sun-bg) 82%, transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.lp-lockup{font-family:var(--cond);font-weight:700;font-size:15px;letter-spacing:3px;color:var(--sun-text)}
+.lp-lockup b{color:var(--sun-brand);font-weight:700}
+.lp-signin{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;
+  color:var(--sun-muted);padding:8px 4px}
+.lp-signin:active{color:var(--sun-text)}
+.lp-hero{padding:54px 0 46px;text-align:left}
+.lp-mark{font-family:var(--display);font-size:64px;line-height:1;letter-spacing:2px;color:var(--sun-brand)}
+.lp-word{font-family:var(--cond);font-weight:700;font-size:22px;letter-spacing:8px;color:var(--sun-text);margin-top:-2px}
+.lp-hero h1{font-family:var(--cond);font-weight:700;font-size:31px;line-height:1.16;margin:26px 0 0;color:var(--sun-text)}
+.lp-sub{color:var(--sun-muted);font-size:15px;line-height:1.65;margin:14px 0 0}
+.lp-cta-row{display:flex;flex-direction:column;gap:12px;margin-top:26px}
+.lp-cta{font-family:var(--cond);font-weight:700;font-size:16px;letter-spacing:1.5px;text-transform:uppercase;
+  padding:16px 22px;border-radius:16px;background:linear-gradient(180deg,#FF9A6A,#FF6B4A);color:var(--sun-on-cta);
+  box-shadow:0 8px 28px rgba(255,107,74,.28), inset 0 1px 0 rgba(255,255,255,.25);
+  transition:transform .06s ease,filter .15s ease}
+.lp-cta:active{transform:scale(.98)}
+.lp-cta:hover{filter:brightness(1.06)}
+.lp-alt{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;
+  color:var(--sun-muted);text-decoration:underline;text-underline-offset:3px;padding:4px}
+.lp-beat{padding:30px 0;border-top:1px solid var(--sun-line)}
+.lp-num{font-family:var(--display);font-size:15px;letter-spacing:2px;color:var(--sun-gold);opacity:.9}
+.lp-beat h2{font-family:var(--cond);font-weight:700;font-size:22px;margin:8px 0 0;color:var(--sun-text)}
+.lp-beat p{color:var(--sun-muted);font-size:14.5px;line-height:1.6;margin:8px 0 0}
+.lp-mock{margin-top:16px;display:grid;gap:8px}
+.lp-mock-row{display:flex;align-items:center;gap:10px;background:var(--sun-card);border:1px solid var(--sun-line);
+  border-radius:12px;padding:11px 13px;font-size:14px;color:var(--sun-text)}
+.lp-mock-kind{font-size:11px;font-family:var(--cond);font-weight:600;letter-spacing:.5px;padding:4px 8px;
+  border-radius:8px;background:color-mix(in srgb, var(--sun-brand) 16%, transparent);color:var(--sun-brand);white-space:nowrap}
+.lp-mock-kind.check{background:color-mix(in srgb, var(--sun-amber) 16%, transparent);color:var(--sun-amber)}
+.lp-mock-chips{display:flex;flex-wrap:wrap;gap:8px}
+.lp-chip{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:.5px;padding:9px 14px;border-radius:11px;
+  background:var(--sun-card);border:1px solid var(--sun-line);color:var(--sun-muted)}
+.lp-chip.active{border-color:var(--sun-brand);color:var(--sun-brand)}
+.lp-mock-code{font-family:var(--display);font-size:30px;letter-spacing:8px;text-align:center;color:var(--sun-gold);
+  background:var(--sun-card);border:1px dashed color-mix(in srgb, var(--sun-gold) 45%, transparent);border-radius:14px;padding:14px}
+.lp-ai-chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--cond);font-weight:600;font-size:12px;
+  letter-spacing:.5px;padding:7px 12px;border-radius:999px;color:var(--sun-amber);
+  background:color-mix(in srgb, var(--sun-amber) 13%, transparent);border:1px solid color-mix(in srgb, var(--sun-amber) 32%, transparent)}
+.lp-swatches{display:flex;gap:12px;margin-top:16px}
+.lp-swatch{width:48px;height:48px;border-radius:14px;border:1px solid var(--sun-line);display:flex;gap:4px;
+  align-items:center;justify-content:center}
+.lp-swatch i{width:10px;height:10px;border-radius:50%}
+.lp-voices{display:grid;gap:8px;margin-top:14px}
+.lp-voice{background:var(--sun-card);border:1px solid var(--sun-line);border-radius:12px;padding:10px 13px}
+.lp-voice b{font-family:var(--cond);font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;
+  color:var(--sun-text);display:block}
+.lp-voice span{color:var(--sun-muted);font-size:12.5px}
+.lp-final{padding:44px 0 8px;text-align:center;border-top:1px solid var(--sun-line)}
+.lp-final h2{font-family:var(--display);font-weight:400;font-size:30px;letter-spacing:1px;color:var(--sun-text);margin:0 0 18px}
+.lp-final .lp-cta{width:100%}
+.lp-foot{padding:34px 0 8px;text-align:center;color:var(--sun-muted);font-size:12px}
+.lp-foot a{color:var(--sun-muted)}
+
 .login-wrap{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;
   padding:calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom))}
 .login-card{width:100%;max-width:400px}
@@ -875,6 +977,44 @@ img{display:block;max-width:100%}
 .field input:focus{outline:none;border-color:var(--brand)}
 .login-err{color:var(--red);font-size:13px;margin:8px 2px;text-align:center}
 .login-note{text-align:center;color:var(--muted-2);font-size:11px;margin-top:16px;line-height:1.5}
+/* Sunrise auth overrides — active only inside .sun-scope (landing/native) */
+.sun-scope .lb-mark{color:var(--sun-brand)}
+.sun-scope .lb-word{color:var(--sun-text)}
+.sun-scope .lb-sub{color:var(--sun-muted)}
+.sun-scope .field label{color:var(--sun-muted)}
+.sun-scope .field input{background:var(--sun-card);border-color:var(--sun-line);color:var(--sun-text)}
+.sun-scope .field input:focus{border-color:var(--sun-brand)}
+.sun-scope .btn-accent{background:linear-gradient(180deg,#FF9A6A,#FF6B4A);border-color:transparent;
+  color:var(--sun-on-cta);box-shadow:0 8px 28px rgba(255,107,74,.28), inset 0 1px 0 rgba(255,255,255,.25)}
+.sun-scope .auth-flip,.sun-scope .login-note{color:var(--sun-muted)}
+.sun-scope .login-err{color:#FF9A8A}
+.lb-back{display:block;margin:0 auto 8px;font-family:var(--cond);font-weight:600;font-size:13px;
+  letter-spacing:1px;text-transform:uppercase;color:var(--sun-muted);padding:6px 10px}
+.lb-back:active{color:var(--sun-text)}
+/* Sunrise guided start (Onboard under .sun-scope) */
+.sun-scope .onb-wrap{color:var(--sun-text)}
+.sun-scope .screen-title{color:var(--sun-text)}
+.sun-scope .muted,.sun-scope .section-label{color:var(--sun-muted)}
+.onb-sub-lg{font-size:14px;line-height:1.6;margin:8px 0 0}
+.onb-dots{display:flex;gap:7px;justify-content:center;margin:2px 0 20px}
+.onb-dots i{width:7px;height:7px;border-radius:50%;background:var(--sun-line)}
+.onb-dots i.on{background:var(--sun-brand)}
+.sun-scope .fmt-chip{background:var(--sun-card);border-color:var(--sun-line);color:var(--sun-muted)}
+.sun-scope .fmt-chip.active{border-color:var(--sun-brand);color:var(--sun-text);background:var(--sun-card)}
+.sun-scope .fmt-chip.active svg{color:var(--sun-brand)}
+.sun-scope .builder-row{background:var(--sun-card);border-color:var(--sun-line)}
+.sun-scope .builder-row input{color:var(--sun-text)}
+.sun-scope .btn{border-color:var(--sun-line);color:var(--sun-text)}
+.sun-scope .btn-accent{border-color:transparent;color:var(--sun-on-cta)}
+.sun-scope .btn-go{border-color:transparent}
+.sun-scope .theme-opt{background:var(--sun-card);border:1px solid var(--sun-line)}
+.sun-scope .theme-opt.active{border-color:var(--sun-brand)}
+.sun-scope .theme-opt .to-label{color:var(--sun-text)}
+.sun-scope .voice-opt .to-label small{color:var(--sun-muted)}
+.sun-scope .theme-opt .to-check{color:var(--sun-brand)}
+.sun-scope .code-big{color:var(--sun-gold);background:var(--sun-card);
+  border-color:color-mix(in srgb, var(--sun-gold) 45%, transparent)}
+.sun-scope .field select{background:var(--sun-card);border-color:var(--sun-line);color:var(--sun-text)}
 .auth-flip{display:block;width:100%;text-align:center;color:var(--muted);font-size:13px;margin-top:14px;text-decoration:underline;text-underline-offset:3px}
 
 .onb-wrap{max-width:600px;margin:0 auto;min-height:100vh;

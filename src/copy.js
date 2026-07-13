@@ -18,19 +18,9 @@ export function storeTone(k) {
 }
 
 // Entries: plain string, or (vars) => string for interpolated copy.
+// (Logged-out surfaces — landing, auth, guided start — use fixed brand copy
+// in their components; voices apply in-app only, after the user picks one.)
 const C = {
-  // ── login ──
-  'login.tagline': {
-    hardcore: 'Build your challenge · bring your crew · no excuses',
-    coach: 'Build your challenge · bring your crew · show up daily',
-    monk: 'Build your challenge · walk it with your people',
-  },
-  'login.note.signin': {
-    hardcore: '75 days · your rules · real stakes',
-    coach: 'your days · your rules · real accountability',
-    monk: 'your days · your rules · your pace',
-  },
-
   // ── onboarding ──
   'onboard.hello.sub': {
     hardcore: "75 days. Your rules. Let's set it up.",

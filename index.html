@@ -2,14 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230B0B0F'/><text x='50' y='42' font-size='34' font-family='Arial Black, sans-serif' font-weight='900' fill='%23FF3B30' text-anchor='middle' dominant-baseline='central'>YOU</text><text x='50' y='70' font-size='20' font-family='Arial Black, sans-serif' font-weight='900' fill='%23FFFFFF' letter-spacing='2' text-anchor='middle' dominant-baseline='central'>MODE</text></svg>" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23130C08'/><text x='50' y='40' font-size='34' font-family='Arial Black, sans-serif' font-weight='900' fill='%23FF7A55' text-anchor='middle' dominant-baseline='central'>YOU</text><text x='50' y='67' font-size='19' font-family='Arial Black, sans-serif' font-weight='900' fill='%23FBF1E9' letter-spacing='2' text-anchor='middle' dominant-baseline='central'>MODE</text><path d='M 12 88 A 75 75 0 0 1 88 88' fill='none' stroke='%23FFB25C' stroke-width='3' stroke-linecap='round'/></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="You Mode" />
-    <meta name="theme-color" content="#0B0B0F" />
-    <meta name="description" content="You Mode — build your own challenge. Daily proof, real stakes, your crew keeping score." />
+    <meta name="theme-color" content="#130C08" />
+    <meta name="description" content="You Mode: build a challenge that fits your life. Your checklist, your format, your stakes, your crew." />
+    <meta property="og:title" content="You Mode" />
+    <meta property="og:description" content="Build a challenge that fits your life. Your checklist, your format, your stakes, your crew." />
+    <meta property="og:url" content="https://youmode.app" />
+    <meta property="og:image" content="https://youmode.app/icon-512.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>You Mode</title>
@@ -21,14 +25,17 @@
          renders so light-theme users never see a black flash (and vice
          versa). Keep the bg/brand map in sync with src/theme.js. */
       try {
-        var t = localStorage.getItem('75hard-theme')
-        t = ['midnight', 'espresso', 'navy', 'sand'].indexOf(t) >= 0 ? t : 'midnight'
-        var m = {
+        var stored = localStorage.getItem('75hard-theme')
+        var known = ['midnight', 'espresso', 'navy', 'sand'].indexOf(stored) >= 0
+        var t = known ? stored : 'midnight'
+        /* No stored theme = brand-new visitor: sunrise first paint (keep this
+           pair in sync with --sun-bg/--sun-brand in src/App.jsx THEME). */
+        var m = known ? {
           midnight: ['#08080b', '#ff3b30'],
           espresso: ['#120D0A', '#ff3b30'],
           navy: ['#070D17', '#ff3b30'],
           sand: ['#EAE0CE', '#A9382A'],
-        }[t]
+        }[t] : ['#130C08', '#FF7A55']
         document.documentElement.dataset.theme = t
         document.documentElement.style.background = m[0]
         document.documentElement.style.setProperty('--boot-brand', m[1])
@@ -38,8 +45,10 @@
     </script>
     <style>
       /* Pre-JS shell: kills the wrong-color flash on standalone launch and
-         shows a brand mark until React mounts. */
-      html, body { margin: 0; background: #08080b; }
+         shows a brand mark until React mounts. body stays transparent so the
+         boot script's per-theme html background paints the whole canvas. */
+      html { background: #130C08; }
+      body { margin: 0; }
       #root:empty::after {
         content: 'YOU';
         display: grid;

@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import * as api from '../data.js'
 import { USERNAME_RE, normalizePhone } from '../config.js'
-import { copyFor, getStoredTone } from '../copy.js'
 
-export default function Login({ onAuthed }) {
-  // Logged out — use the device-cached voice (defaults to hardcore).
-  const t = copyFor(getStoredTone())
-  const [mode, setMode] = useState('signin') // signin | signup
+// Fixed copy — the voice system is in-app only; logged-out surfaces speak in
+// the warm brand register.
+export default function Login({ onAuthed, initialMode = 'signin', onBack }) {
+  const [mode, setMode] = useState(initialMode) // signin | signup
   const [username, setUsername] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
@@ -40,10 +39,11 @@ export default function Login({ onAuthed }) {
   return (
     <div className="login-wrap">
       <div className="login-card">
+        {onBack && <button className="lb-back" onClick={onBack}>← Back</button>}
         <div className="login-brand">
           <div className="lb-mark">YOU</div>
           <div className="lb-word">MODE</div>
-          <div className="lb-sub">{t('login.tagline')}</div>
+          <div className="lb-sub">Your challenge. Your rules. Your pace.</div>
         </div>
 
         <form onSubmit={submit}>
@@ -74,7 +74,7 @@ export default function Login({ onAuthed }) {
           {signup ? 'Already have an account? Sign in' : 'New here? Create an account'}
         </button>
 
-        <div className="login-note">{signup ? 'Your number stays private — challenge updates only, no spam.' : t('login.note.signin')}</div>
+        <div className="login-note">{signup ? 'Your number stays private. Challenge updates only, no spam.' : 'your days · your rules · your people'}</div>
       </div>
     </div>
   )
