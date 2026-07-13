@@ -6,8 +6,22 @@
 //   SUPABASE_URL, SUPABASE_SERVICE_KEY, ANTHROPIC_API_KEY
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
+const CORS = {
+  'Access-Control-Allow-Origin': '*', // auth is enforced via the Supabase JWT below
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
 
+// Handle preflight + stamp CORS on every response so the native app (and dev
+// preview) can call this cross-origin.
 export default async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
+  const res = await handle(req)
+  for (const [k, v] of Object.entries(CORS)) res.headers.set(k, v)
+  return res
+}
+
+async function handle(req) {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
   const SUPABASE_URL = process.env.SUPABASE_URL
   const SERVICE = process.env.SUPABASE_SERVICE_KEY

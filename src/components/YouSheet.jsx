@@ -9,7 +9,7 @@ import Sheet from './Sheet.jsx'
 // for comparison; swipe down or tap the backdrop to dismiss.
 export default function YouSheet({
   theme, onPickTheme, tone, onPickTone,
-  sharing, onPickSharing, photoReqs = [], onToggleReq, showPrivacy = true, onClose,
+  sharing, onPickSharing, photoReqs = [], onToggleReq, showPrivacy = true, onDeleteAccount, onClose,
 }) {
   return (
     <Sheet onClose={onClose}>
@@ -48,7 +48,43 @@ export default function YouSheet({
         <PrivacySection sharing={sharing} onPickSharing={onPickSharing}
           photoReqs={photoReqs} onToggleReq={onToggleReq} />
       )}
+
+      {onDeleteAccount && <DeleteAccount onDelete={onDeleteAccount} />}
     </Sheet>
+  )
+}
+
+// Irreversible — a two-step confirm guards it. On success the app clears the
+// session and returns to the login screen, so this component just unmounts.
+function DeleteAccount({ onDelete }) {
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  return (
+    <>
+      <div className="section-label">Account</div>
+      {!confirming ? (
+        <button className="theme-opt danger-opt" onClick={() => setConfirming(true)}>
+          <span className="to-label">Delete account</span>
+          <Icon name="x" size={16} />
+        </button>
+      ) : (
+        <div className="danger-confirm">
+          <p className="muted" style={{ fontSize: 12, margin: '0 0 12px' }}>
+            This permanently deletes your account, your logged proof, and your goals. It can't be undone.
+            Challenges you own pass to a teammate.
+          </p>
+          {err && <div className="login-err" style={{ textAlign: 'left', marginBottom: 10 }}>{err}</div>}
+          <div className="review-actions">
+            <button className="btn btn-ghost" disabled={busy} onClick={() => { setConfirming(false); setErr(null) }}>Keep my account</button>
+            <button className="btn btn-danger" disabled={busy} onClick={async () => {
+              setBusy(true); setErr(null)
+              try { await onDelete() } catch (e) { setErr(e.message); setBusy(false) }
+            }}>{busy ? 'Deleting…' : 'Delete forever'}</button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

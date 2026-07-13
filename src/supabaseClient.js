@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { Capacitor } from '@capacitor/core'
 import { usernameToEmail, MEMBER_COLORS } from './config.js'
 
 // Shared "somewhere" Supabase project (same as the crm app). The anon key is
@@ -117,6 +118,25 @@ export async function savePhotoSharing(userId, value) {
 export async function setReqPrivacy(reqId, isPrivate) {
   const { error } = await supabase.from('requirements').update({ is_private: isPrivate }).eq('id', reqId)
   if (error && !/is_private/i.test(error.message || '')) throw error
+}
+
+// Permanently delete the signed-in user's account + all their data (App
+// Store requirement). Server-side (service key) handles the cascade; here we
+// just authorize with the session token and then clear the local session.
+export async function deleteAccount() {
+  const { data } = await supabase.auth.getSession()
+  const token = data?.session?.access_token
+  if (!token) throw new Error('not signed in')
+  const res = await fetch(`${API_BASE}/api/delete-account`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || 'Could not delete your account')
+  }
+  try { await supabase.auth.signOut() } catch { /* session is gone anyway */ }
+  localStorage.removeItem(ACTIVE_KEY)
 }
 
 export async function signOut() {
@@ -392,8 +412,14 @@ export async function dismissAiFlag(entryId) {
   if (error) throw error
 }
 
-// In dev the Vite server has no /api routes — talk to the deployed functions.
-export const API_BASE = import.meta.env.DEV ? 'https://youmode-app.netlify.app' : ''
+// Where the /api/* Netlify functions live:
+//  • Native app (Capacitor): assets load from a local origin with no backend,
+//    so call the deployed site absolutely.
+//  • Dev preview: the Vite server has no /api routes — hit the deployed site.
+//  • Web deploy: same-origin ('').
+export const API_BASE = Capacitor.isNativePlatform()
+  ? 'https://youmode.app'
+  : (import.meta.env.DEV ? 'https://youmode-app.netlify.app' : '')
 
 // Ad-hoc "extra meal" slots for body-goal users: a fixed pool of optional
 // photo requirements (reused per day) so snacks/extras count toward macros
@@ -490,7 +516,7 @@ async function requestAiReview(entryId) {
     const { data } = await supabase.auth.getSession()
     const token = data?.session?.access_token
     if (!token) return
-    fetch('/api/review-photo', {
+    fetch(`${API_BASE}/api/review-photo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ entryId }),

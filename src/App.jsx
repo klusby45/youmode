@@ -126,6 +126,12 @@ export default function App() {
     setBundle(null)
   }, [])
 
+  const deleteAccount = useCallback(async () => {
+    await api.deleteAccount() // server cascades + clears the local session
+    setUserId(null)
+    setBundle(null)
+  }, [])
+
   const switchChallenge = useCallback(async (cid) => {
     api.setActiveChallengeId(cid)
     await refresh()
@@ -301,6 +307,7 @@ export default function App() {
             photoReqs={reqsFor(me.id).filter((r) => r.kind === 'photo' && !api.isExtraMeal(r))}
             onToggleReq={async (reqId, next) => { await api.setReqPrivacy(reqId, next); await refresh() }}
             showPrivacy={!isReferee}
+            onDeleteAccount={deleteAccount}
             onClose={() => setYouOpen(false)} />
         )}
 
@@ -918,6 +925,9 @@ img{display:block;max-width:100%}
   letter-spacing:.5px;padding:4px 9px;border-radius:999px;background:var(--panel-3);color:var(--muted)}
 .lock-pill.on{background:color-mix(in srgb, var(--amber) 18%, transparent);color:var(--amber)}
 .lock-opt .to-label{flex:1}
+.danger-opt .to-label{color:var(--red)}
+.danger-opt svg{color:var(--red);opacity:.8}
+.danger-confirm{background:color-mix(in srgb,var(--red) 7%,transparent);border:1px solid color-mix(in srgb,var(--red) 28%,transparent);border-radius:14px;padding:14px}
 .theme-swatch{width:36px;height:36px;border-radius:11px;border:1px solid var(--line-2);flex:none;
   display:flex;gap:4px;align-items:center;justify-content:center}
 .theme-swatch i{width:9px;height:9px;border-radius:50%;display:block}
