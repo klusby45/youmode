@@ -9,6 +9,7 @@ import Icon from './components/Icons.jsx'
 import YouSheet from './components/YouSheet.jsx'
 import Landing from './components/Landing.jsx'
 import Login from './components/Login.jsx'
+import ResetPassword from './components/ResetPassword.jsx'
 import Onboard from './components/Onboard.jsx'
 import Today from './components/Today.jsx'
 import Standings from './components/Standings.jsx'
@@ -17,6 +18,15 @@ import Goals from './components/Goals.jsx'
 import JudgeQueue from './components/JudgeQueue.jsx'
 
 export default function App() {
+  // Password-reset link target (youmode.app/reset?token=...) — handled before
+  // any auth/boot logic so a logged-out visitor can set a new password.
+  const [resetToken, setResetToken] = useState(() => {
+    try {
+      const u = new URL(window.location.href)
+      if (u.pathname.replace(/\/$/, '') === '/reset') return u.searchParams.get('token') || null
+    } catch { /* ignore */ }
+    return null
+  })
   const [booting, setBooting] = useState(true)
   const [userId, setUserId] = useState(null)
   const [bundle, setBundle] = useState(null) // { profile, challenges, active }
@@ -186,6 +196,19 @@ export default function App() {
     setReqPrivacy: api.setReqPrivacy,
   }), [refresh, signOut, switchChallenge])
 
+  // Reset-password link wins over everything (even a live session).
+  if (resetToken) {
+    return (
+      <>
+        <style>{THEME}</style>
+        <ResetPassword token={resetToken} onDone={() => {
+          try { window.history.replaceState({}, '', '/') } catch { /* ignore */ }
+          setResetToken(null)
+        }} />
+      </>
+    )
+  }
+
   if (booting) {
     return (
       <div className="app-bg">
@@ -320,6 +343,8 @@ export default function App() {
             photoReqs={reqsFor(me.id).filter((r) => r.kind === 'photo' && !api.isExtraMeal(r))}
             onToggleReq={async (reqId, next) => { await api.setReqPrivacy(reqId, next); await refresh() }}
             showPrivacy={!isReferee}
+            email={me.email}
+            onSaveEmail={async (v) => { await api.saveEmail(me.id, v); await refresh() }}
             onDeleteAccount={deleteAccount}
             onClose={() => setYouOpen(false)} />
         )}

@@ -9,7 +9,8 @@ import Sheet from './Sheet.jsx'
 // for comparison; swipe down or tap the backdrop to dismiss.
 export default function YouSheet({
   theme, onPickTheme, tone, onPickTone,
-  sharing, onPickSharing, photoReqs = [], onToggleReq, showPrivacy = true, onDeleteAccount, onClose,
+  sharing, onPickSharing, photoReqs = [], onToggleReq, showPrivacy = true,
+  email, onSaveEmail, onDeleteAccount, onClose,
 }) {
   return (
     <Sheet onClose={onClose}>
@@ -49,8 +50,41 @@ export default function YouSheet({
           photoReqs={photoReqs} onToggleReq={onToggleReq} />
       )}
 
+      {onSaveEmail && <RecoveryEmail email={email} onSave={onSaveEmail} />}
       {onDeleteAccount && <DeleteAccount onDelete={onDeleteAccount} />}
     </Sheet>
+  )
+}
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+// Recovery email: the address a password-reset link is sent to. Existing
+// accounts created before this feature can add one here.
+function RecoveryEmail({ email, onSave }) {
+  const [val, setVal] = useState(email || '')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const dirty = val.trim().toLowerCase() !== (email || '').toLowerCase()
+  async function save() {
+    if (!EMAIL_RE.test(val.trim())) { setMsg({ err: true, t: 'Enter a valid email' }); return }
+    setBusy(true); setMsg(null)
+    try { await onSave(val.trim()); setMsg({ err: false, t: 'Saved' }) }
+    catch (e) { setMsg({ err: true, t: e.message }) }
+    finally { setBusy(false) }
+  }
+  return (
+    <>
+      <div className="section-label">Recovery email</div>
+      <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
+        Where we send a reset link if you forget your password. Private, never shared.
+      </p>
+      <div className="row-split" style={{ gap: 8 }}>
+        <input className="fr-input" style={{ flex: 1 }} type="email" inputMode="email" autoCapitalize="none"
+          value={val} placeholder="you@example.com" onChange={(e) => { setVal(e.target.value); setMsg(null) }} />
+        <button className="btn btn-go btn-sm" disabled={busy || !dirty} onClick={save}>{busy ? '…' : 'Save'}</button>
+      </div>
+      {msg && <div className={msg.err ? 'login-err' : 'muted'} style={{ textAlign: 'left', fontSize: 12, marginTop: 6 }}>{msg.t}</div>}
+    </>
   )
 }
 

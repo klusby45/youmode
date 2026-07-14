@@ -78,7 +78,7 @@ export async function signIn(usernameOrEmail, password) {
   return data.user.id
 }
 
-export async function signUp({ username, phone, password }) {
+export async function signUp({ username, phone, password, email }) {
   const uname = username.trim().toLowerCase()
   const { data: taken } = await supabase.rpc('email_for_username', { u: uname })
   if (taken) throw new Error('That username is taken')
@@ -86,13 +86,37 @@ export async function signUp({ username, phone, password }) {
   if (error) throw error
   if (!data.session) throw new Error('Signup needs email confirmation disabled in Supabase — ask the admin')
   const display = uname.charAt(0).toUpperCase() + uname.slice(1)
-  // New accounts start in the Coach voice; strip-and-retry keeps signup
-  // working before the tone column migration lands.
-  const base = { id: data.user.id, username: uname, display_name: display, phone, role: 'participant' }
+  // Real email is stored on the profile (for password recovery); the auth
+  // login still uses the synthetic username email. New accounts start in Coach
+  // voice; strip-and-retry keeps signup working before the tone column lands.
+  const base = { id: data.user.id, username: uname, display_name: display, phone, role: 'participant', email: email?.trim().toLowerCase() || null }
   let { error: pe } = await supabase.from('profiles').insert({ ...base, tone: 'coach' })
   if (pe && /tone/i.test(pe.message || '')) ({ error: pe } = await supabase.from('profiles').insert(base))
   if (pe) throw pe
   return data.user.id
+}
+
+// Recovery email (stored on profile; used only for password reset + contact).
+export async function saveEmail(userId, email) {
+  const { error } = await supabase.from('profiles').update({ email: email?.trim().toLowerCase() || null }).eq('id', userId)
+  if (error) throw error
+}
+
+// Password reset (server-side; delivers a link to the real email on file).
+export async function requestReset(identifier) {
+  const res = await fetch(`${API_BASE}/api/request-reset`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier }),
+  })
+  if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Could not send the reset email') }
+}
+
+export async function resetPassword(token, password) {
+  const res = await fetch(`${API_BASE}/api/reset-password`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password }),
+  })
+  if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Could not reset your password') }
 }
 
 // Persist the user's colorway. Pre-migration (no profiles.theme column yet)

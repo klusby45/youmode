@@ -2,5 +2,7 @@
 /api/estimate-meal  /.netlify/functions/estimate-meal  200
 /api/goal-coach  /.netlify/functions/goal-coach  200
 /api/delete-account  /.netlify/functions/delete-account  200
+/api/request-reset  /.netlify/functions/request-reset  200
+/api/reset-password  /.netlify/functions/reset-password  200
 /privacy  /privacy.html  200
 /*    /index.html   200
