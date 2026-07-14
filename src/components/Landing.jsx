@@ -122,9 +122,9 @@ export default function Landing({ onAuthed }) {
         <div className="lp-num">05</div>
         <h2>Make it yours.</h2>
         <p>
-          Down to the look and the voice. Four colorways, from warm daylight to the original
-          Midnight. Three voices, from gentle Monk to no-excuses Hard Core. The app talks to you
-          the way you want to be talked to.
+          Down to the look and the voice. Five colorways, from warm daylight and soft blush to
+          the original Midnight. Three voices, from gentle Monk to no-excuses Hard Core. The app
+          talks to you the way you want to be talked to.
         </p>
         <div className="lp-swatches" aria-hidden="true">
           {THEMES.map((t) => (

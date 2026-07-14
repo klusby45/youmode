@@ -19,14 +19,14 @@
     <title>You Mode</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet" />
     <script>
       /* Pre-paint theme boot: apply the cached colorway before anything
          renders so light-theme users never see a black flash (and vice
          versa). Keep the bg/brand map in sync with src/theme.js. */
       try {
         var stored = localStorage.getItem('75hard-theme')
-        var known = ['midnight', 'espresso', 'navy', 'sand'].indexOf(stored) >= 0
+        var known = ['midnight', 'espresso', 'navy', 'sand', 'blush'].indexOf(stored) >= 0
         var t = known ? stored : 'midnight'
         /* No stored theme = brand-new visitor: sunrise first paint (keep this
            pair in sync with --sun-bg/--sun-brand in src/App.jsx THEME). */
@@ -35,6 +35,7 @@
           espresso: ['#120D0A', '#ff3b30'],
           navy: ['#070D17', '#ff3b30'],
           sand: ['#EAE0CE', '#A9382A'],
+          blush: ['#F8F1EA', '#A34A60'],
         }[t] : ['#130C08', '#FF7A55']
         document.documentElement.dataset.theme = t
         document.documentElement.style.background = m[0]

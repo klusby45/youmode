@@ -1110,4 +1110,34 @@ img{display:block;max-width:100%}
 /* iOS standalone: white status text needs a dark seat on the light theme */
 :root[data-theme="sand"] body::before{content:'';position:fixed;top:0;left:0;right:0;
   height:env(safe-area-inset-top);background:#241B12;z-index:98;pointer-events:none}
+
+/* ── Blush: SGS-inspired look pack — cream + pastels + indigo + serif ── */
+:root[data-theme="blush"]{
+  color-scheme:light;
+  --bg:#F8F1EA; --panel:#FFFFFF; --panel-2:#F6EDE4; --panel-3:#EDDFD4;
+  --line:rgba(123,79,98,.14); --line-2:rgba(123,79,98,.26);
+  --text:#3B3A6E; --muted:#635D85; --muted-2:#8F89AC;
+  --red:#B23A50; --green:#2F6E57; --gold:#8A6A14; --amber:#A4551C; --blue:#3E6BB4; --purple:#7B4E9E;
+  --brand:#A34A60;
+  --on-accent:#FBF4EE; --on-green:#F1F7F2; --on-amber:#FFF4E8; --on-red:#FFF6F4;
+  --ring:rgba(59,58,110,.18);
+  --glow-1:#F7E1E0; --glow-2:#E4EBF7; --glow-fade:rgba(248,241,234,0);
+  --gc-face1:#E4F0E5; --gc-face2:#D2E6D8; --gc-star:rgba(47,110,87,.9);
+  --r:22px; --r-sm:14px;
+  --title-font:'Playfair Display',Georgia,serif; --title-track:0; --title-case:none;
+  --num-font:'Playfair Display',Georgia,serif;
+  --daypill-bg:#F9E0CD; --score-bg:#E7E1F6; --water-bg:#DCE9F7;
+  --macro-bg:#DDEEDE; --goalcard-bg:#F8DCE3; --row-me-bg:#F3E6EC;
+}
+/* iOS standalone: dark indigo seat for white status text */
+:root[data-theme="blush"] body::before{content:'';position:fixed;top:0;left:0;right:0;
+  height:env(safe-area-inset-top);background:#2E2B52;z-index:98;pointer-events:none}
+/* Playfair metrics vs Anton condensed: size/weight compensation, blush only */
+:root[data-theme="blush"] .screen-title{font-size:28px;font-weight:600}
+:root[data-theme="blush"] .vs-day{font-size:52px;font-weight:600}
+:root[data-theme="blush"] .today-hero .h-day{font-size:36px;font-weight:600}
+:root[data-theme="blush"] .daypill-n{font-size:18px;font-weight:600}
+:root[data-theme="blush"] .tc-count{font-size:22px;font-weight:600}
+:root[data-theme="blush"] .bg-now .n{font-size:38px;font-weight:600}
+:root[data-theme="blush"] .lb-days{font-size:17px;font-weight:600}
 `

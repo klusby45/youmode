@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 // theme.js — the colorway system.
-// Four themes: Midnight (default, the original), Espresso, Navy, Sand.
+// Five themes: Midnight (default, the original), Espresso, Navy, Sand, and
+// Blush (the SGS-inspired look pack: pastels + serif, all theme-scoped).
 // CSS variables live in App.jsx's THEME string (`:root` = Midnight plus
 // `:root[data-theme=...]` override blocks); this module owns the metadata,
 // the member-accent remaps, and applying/persisting the choice.
@@ -12,9 +13,10 @@ export const THEMES = [
   { key: 'espresso', label: 'Espresso', swatch: { bg: '#120D0A', a: '#FF8A5C', b: '#3FD8C2' } },
   { key: 'navy', label: 'Navy', swatch: { bg: '#070D17', a: '#FF6B8A', b: '#3BD5F5' } },
   { key: 'sand', label: 'Sand', swatch: { bg: '#EAE0CE', a: '#8E3B54', b: '#206B62' } },
+  { key: 'blush', label: 'Blush', swatch: { bg: '#F8F1EA', a: '#A34A60', b: '#3E6BB4' } },
 ]
 
-export const THEME_BG = { midnight: '#08080b', espresso: '#120D0A', navy: '#070D17', sand: '#EAE0CE' }
+export const THEME_BG = { midnight: '#08080b', espresso: '#120D0A', navy: '#070D17', sand: '#EAE0CE', blush: '#F8F1EA' }
 
 // Member accents stay canonical in the DB (MEMBER_COLORS); the three new
 // themes remap them at render time to psychology-safe hues (no pure
@@ -24,6 +26,7 @@ export const ACCENT_MAPS = {
   espresso: { '#FF3B30': '#FF8A5C', '#34C759': '#3FD8C2', '#0A84FF': '#7FA8FF', '#FF9F0A': '#F2789F', '#FFD60A': '#FFCE54' },
   navy: { '#FF3B30': '#FF6B8A', '#34C759': '#3BD5F5', '#0A84FF': '#9D8CFF', '#FF9F0A': '#FFA35C', '#FFD60A': '#FFD34D' },
   sand: { '#FF3B30': '#8E3B54', '#34C759': '#206B62', '#0A84FF': '#3B5B8C', '#FF9F0A': '#74468C', '#FFD60A': '#7A5E0C' },
+  blush: { '#FF3B30': '#A34A60', '#34C759': '#2F6E57', '#0A84FF': '#3E6BB4', '#FF9F0A': '#B4622D', '#FFD60A': '#96700F' },
 }
 
 export const mapAccent = (theme, hex) =>
