@@ -130,9 +130,12 @@ export default function App() {
   }, [refresh])
 
   const onAuthed = useCallback(async (uid) => {
-    setUserId(uid)
+    // Load the bundle BEFORE flipping to the logged-in state, so we never
+    // render the "can't reach the server" fallback in the gap between userId
+    // being set and the data arriving (that gap was a ~1s error flash on login).
     await refresh(uid)
     setView('today')
+    setUserId(uid)
   }, [refresh])
 
   const signOut = useCallback(async () => {
