@@ -380,6 +380,13 @@ const THEME = `
   --gc-face1:#16251b; --gc-face2:#0b140e; --gc-star:rgba(200,255,215,.95);
   --display:'Anton',sans-serif; --cond:'Oswald',sans-serif; --sans:'Inter',sans-serif;
   --r:18px; --r-sm:12px;
+  /* look-pack hooks: defaults mirror current values exactly, so existing
+     themes are computed-identical; a theme block may override (e.g. Blush
+     swaps titles/big numbers to a serif and tints stat surfaces pastel). */
+  --title-font:var(--cond); --title-track:1px; --title-case:uppercase;
+  --num-font:var(--display);
+  --daypill-bg:var(--panel); --score-bg:var(--panel); --water-bg:var(--panel);
+  --macro-bg:var(--panel); --goalcard-bg:var(--panel); --row-me-bg:var(--panel-2);
   /* ── Sunrise: first-impression brand (landing/auth/onboard ONLY). Scoped on
      purpose — never overridden per colorway, never consumed by in-app CSS. */
   --sun-bg:#130C08; --sun-card:#1E1410; --sun-line:rgba(255,214,190,.14);
@@ -454,9 +461,9 @@ img{display:block;max-width:100%}
 .rename-chip svg{opacity:.6}
 .rename-chip:active{color:var(--text)}
 .daypill{display:flex;align-items:baseline;gap:6px;padding:7px 14px;border:1px solid var(--line-2);
-  border-radius:999px;background:var(--panel);font-family:var(--cond);letter-spacing:1px}
+  border-radius:999px;background:var(--daypill-bg);font-family:var(--cond);letter-spacing:1px}
 .daypill-k{font-size:11px;color:var(--muted);font-weight:600}
-.daypill-n{font-family:var(--display);font-size:20px;line-height:1}
+.daypill-n{font-family:var(--num-font);font-size:20px;line-height:1}
 .daypill-t{font-size:12px;color:var(--muted)}
 .top-right{display:flex;align-items:center;gap:8px}
 .chal-switch{background:var(--panel);border:1px solid var(--line-2);color:var(--text);border-radius:10px;
@@ -474,7 +481,7 @@ img{display:block;max-width:100%}
 /* views */
 .view{padding:18px 16px 8px}
 .screen-head{display:flex;align-items:flex-end;justify-content:space-between;margin:2px 2px 16px}
-.screen-title{font-family:var(--cond);font-weight:700;font-size:26px;letter-spacing:1px;text-transform:uppercase}
+.screen-title{font-family:var(--title-font);font-weight:700;font-size:26px;letter-spacing:var(--title-track);text-transform:var(--title-case)}
 .screen-sub{color:var(--muted);font-size:13px;margin-top:2px}
 .section-label{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:2.5px;
   text-transform:uppercase;color:var(--muted);margin:22px 4px 10px}
@@ -512,14 +519,14 @@ img{display:block;max-width:100%}
 
 /* ── standings ── */
 .scoreboard{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:stretch;
-  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 8px;margin-bottom:14px}
+  background:var(--score-bg);border:1px solid var(--line);border-radius:var(--r);padding:16px 8px;margin-bottom:14px}
 .scoreboard.solo{grid-template-columns:1fr}
 .scoreboard.grid{grid-template-columns:1fr 1fr}
 .vs-col{text-align:center;padding:4px 8px}
 .vs-name{font-family:var(--cond);font-weight:700;letter-spacing:1px;text-transform:uppercase;font-size:15px;
   display:inline-flex;align-items:center;gap:7px}
 .vs-dot{width:9px;height:9px;border-radius:50%}
-.vs-day{font-family:var(--display);font-size:60px;line-height:.95;margin:6px 0 0}
+.vs-day{font-family:var(--num-font);font-size:60px;line-height:.95;margin:6px 0 0}
 .vs-day small{font-family:var(--cond);font-size:16px;color:var(--muted);font-weight:500}
 .vs-row{display:flex;justify-content:center;gap:14px;margin-top:10px}
 .vs-mini{text-align:center}
@@ -529,13 +536,13 @@ img{display:block;max-width:100%}
   color:var(--muted-2)}
 .leaderboard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:6px 4px}
 .lb-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px}
-.lb-row.me{background:var(--panel-2)}
+.lb-row.me{background:var(--row-me-bg)}
 .lb-rank{font-family:var(--display);font-size:15px;color:var(--muted-2);width:18px;text-align:center}
 .lb-name{flex:1;font-family:var(--cond);font-weight:600;font-size:15px;letter-spacing:.5px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lb-streak{display:inline-flex;align-items:center;gap:3px;color:var(--amber);font-family:var(--cond);
   font-weight:600;font-size:13px}
-.lb-days{font-family:var(--display);font-size:18px;line-height:1}
+.lb-days{font-family:var(--num-font);font-size:18px;line-height:1}
 .lb-days small{font-family:var(--cond);font-size:11px;color:var(--muted);font-weight:500}
 .lb-bar{flex-basis:56px;flex-shrink:0;height:5px;border-radius:3px;background:var(--panel-3);overflow:hidden}
 .lb-fill{display:block;height:100%;border-radius:3px}
@@ -549,7 +556,7 @@ img{display:block;max-width:100%}
 .tc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
 .tc-you{font-family:var(--cond);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted-2);
   border:1px solid var(--line-2);border-radius:99px;padding:1px 6px;margin-left:8px}
-.tc-count{font-family:var(--display);font-size:24px;line-height:1}
+.tc-count{font-family:var(--num-font);font-size:24px;line-height:1}
 .tc-count small{font-family:var(--cond);font-size:13px;color:var(--muted);font-weight:500}
 .tc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .tc-cell{position:relative;aspect-ratio:1/1;border-radius:8px;overflow:hidden;border:1px solid var(--line);
@@ -609,7 +616,7 @@ img{display:block;max-width:100%}
 
 /* photo slots (today) */
 .today-hero{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
-.today-hero .h-day{font-family:var(--display);font-size:40px;line-height:1}
+.today-hero .h-day{font-family:var(--num-font);font-size:40px;line-height:1}
 .slots-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .slot{position:relative;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--panel);
   overflow:hidden;aspect-ratio:1/1;display:flex;flex-direction:column;justify-content:flex-end;
@@ -647,7 +654,7 @@ img{display:block;max-width:100%}
   background:color-mix(in srgb,var(--scrim) 75%,transparent);color:var(--on-scrim-muted);display:grid;place-items:center;border:1px solid var(--glass-line)}
 
 /* ── body goal: macro bar, fuel log, trend ── */
-.macrobar{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-top:12px}
+.macrobar{background:var(--macro-bg);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-top:12px}
 .mb-row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
 .mb-label{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
   color:var(--muted);width:64px;flex:none}
@@ -735,7 +742,7 @@ img{display:block;max-width:100%}
   border-radius:var(--r);padding:16px;margin-top:4px}
 .pp-title{display:inline-flex;align-items:center;gap:6px;font-family:var(--cond);font-weight:600;
   font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--green);margin-bottom:6px}
-.pp-goal{font-family:var(--cond);font-weight:600;font-size:19px;margin-bottom:10px}
+.pp-goal{font-family:var(--title-font);font-weight:600;font-size:19px;margin-bottom:10px}
 .pp-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px;color:var(--muted)}
 .pp-grid b{color:var(--text)}
 
@@ -758,7 +765,7 @@ img{display:block;max-width:100%}
 .ai-note .an-txt b{color:var(--amber)}
 
 .watertoggle{display:flex;align-items:center;gap:14px;margin-top:10px;padding:16px 18px;border-radius:var(--r);
-  border:1px solid var(--line);background:var(--panel);cursor:pointer;width:100%;text-align:left}
+  border:1px solid var(--line);background:var(--water-bg);cursor:pointer;width:100%;text-align:left}
 .watertoggle .wt-box{width:30px;height:30px;border-radius:9px;border:2px solid var(--line-2);display:grid;
   place-items:center;flex:none;transition:.15s}
 .watertoggle .wt-title{font-family:var(--cond);font-weight:600;font-size:15px}
@@ -797,7 +804,7 @@ img{display:block;max-width:100%}
 .legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
 
 /* goals */
-.goal-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:12px;
+.goal-card{background:var(--goalcard-bg);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:12px;
   position:relative;overflow:hidden}
 .goal-card::before{content:'';position:absolute;inset:0 0 auto 0;height:110px;pointer-events:none;
   background:linear-gradient(180deg,var(--gc-wash,transparent),transparent)}
@@ -819,7 +826,7 @@ img{display:block;max-width:100%}
   padding:12px 0;outline:none;min-width:0}
 .weigh-input .u{color:var(--muted);font-size:11px;font-family:var(--cond);letter-spacing:1px;text-transform:uppercase;flex:none}
 .goal-top{display:flex;align-items:center;gap:10px;margin-bottom:4px}
-.goal-name{font-family:var(--cond);font-weight:700;font-size:18px;letter-spacing:.5px}
+.goal-name{font-family:var(--title-font);font-weight:700;font-size:18px;letter-spacing:.5px}
 .goal-milestone{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
 .goal-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .counter{display:flex;align-items:center;gap:12px}

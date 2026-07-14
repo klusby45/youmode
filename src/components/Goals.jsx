@@ -119,7 +119,7 @@ function GoalCard({ p }) {
           } />
           <div className="goal-row" style={{ alignItems: 'flex-end' }}>
             <div>
-              <span style={{ fontFamily: 'var(--display)', fontSize: 34 }}>{g.count}</span>
+              <span style={{ fontFamily: 'var(--num-font)', fontSize: 34 }}>{g.count}</span>
               <span className="muted" style={{ fontFamily: 'var(--cond)', fontSize: 16 }}> / {g.target} {g.countLabel}</span>
             </div>
             {mine && (
