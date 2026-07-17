@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../appContext.js'
 import { isMealReq } from '../config.js'
-import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies } from '../lib/challenge.js'
+import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, weeklyProgress } from '../lib/challenge.js'
 import { IS_MOBILE } from '../lib/device.js'
 import * as api from '../data.js'
 import Icon from './Icons.jsx'
 import ProofImage from './ProofImage.jsx'
 import Sheet from './Sheet.jsx'
+import DayComplete from './DayComplete.jsx'
 
 export default function Today() {
-  const { cfg, me, logs, reqsFor, actions, challenge, daysFor, myPlan, t } = useApp()
+  const { cfg, me, logs, reqsFor, actions, challenge, daysFor, myPlan, t, mode, summaries } = useApp()
   const myDays = daysFor(me.id)
   const [uploading, setUploading] = useState(null)
   const [saving, setSaving] = useState(null) // requirement id of an in-flight check
@@ -27,6 +28,22 @@ export default function Today() {
   const doneCount = logDone(reqs, log)
   const total = logTotal(reqs)
   const complete = isLogComplete(reqs, log)
+
+  // Day Complete celebration: fires only on the false→true transition of
+  // `complete` in THIS session (never on mount, so finishing on another device
+  // doesn't re-celebrate here) and once per day via localStorage.
+  const [celebrate, setCelebrate] = useState(false)
+  const wasComplete = useRef(complete)
+  useEffect(() => {
+    if (complete && !wasComplete.current && dayNum >= 1 && dayNum <= myDays) {
+      const key = `75hard-dc-${challenge.id}-${cfg.todayStr}`
+      try {
+        if (!localStorage.getItem(key)) { localStorage.setItem(key, '1'); setCelebrate(true) }
+      } catch { setCelebrate(true) } // private mode: fall back to once per mount
+    }
+    wasComplete.current = complete
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complete])
 
   // Self-heal: a meal that has a caption + photo but no estimate got stranded
   // (a fire-and-forget estimate silently failed). Retry it once per entry per
@@ -112,8 +129,13 @@ export default function Today() {
   // Extra-meal slots only render once filled; the empty next one is offered
   // via the "+ Add a meal" tile (body-goal users only).
   const isFilled = (r) => { const e = log?.entriesByReq?.[r.id]; return !!(e?.photoPaths?.length || e?.photoPath) }
-  const photos = reqs.filter((r) => r.kind === 'photo' && (!api.isExtraMeal(r) || isFilled(r)))
-  const checks = reqs.filter((r) => r.kind === 'check')
+  const daily = (r) => r.frequency !== 'weekly'
+  const photos = reqs.filter((r) => r.kind === 'photo' && daily(r) && (!api.isExtraMeal(r) || isFilled(r)))
+  const checks = reqs.filter((r) => r.kind === 'check' && daily(r))
+  // Weekly-cadence items live in their own "This week" section — they never
+  // gate the day, so they're pulled out of the daily grids above.
+  const weekly = reqs.filter((r) => r.frequency === 'weekly' && !api.isExtraMeal(r)).sort((a, b) => a.sort - b.sort)
+  const wprog = weeklyProgress(reqs, myLogs, { startStr: cfg.startStr, dayNumber: dayNum, totalDays: myDays })
   const extraSlots = reqs.filter((r) => api.isExtraMeal(r) && r.kind === 'photo').sort((a, b) => a.sort - b.sort)
   const nextExtra = extraSlots.find((r) => !isFilled(r))
   // Body-goal extras (only for members with a plan): filled meal entries get
@@ -129,16 +151,30 @@ export default function Today() {
 
   return (
     <div>
-      <div className="today-hero">
-        <div>
-          <div className="section-label" style={{ margin: '0 0 2px' }}>Today · {cfg.todayStr}</div>
-          <div className="h-day">DAY {dayNum}</div>
-        </div>
-        <Ring done={doneCount} total={total} />
-      </div>
+      {mode === 'soft' ? (
+        // Linen layout: the day IS the hero — big ring, serif day number, and
+        // a voice line instead of the stat-dense header + togo banner.
+        <>
+          <SoftHero dayNum={dayNum} done={doneCount} total={total} date={cfg.todayStr} complete={complete} t={t} />
+          {(approved || rejected || (complete && cfg.hasReferee)) && (
+            <StatusBanner approved={approved} rejected={rejected} complete={complete} note={log?.judgeNote}
+              doneCount={doneCount} total={total} hasReferee={cfg.hasReferee} t={t} />
+          )}
+        </>
+      ) : (
+        <>
+          <div className="today-hero">
+            <div>
+              <div className="section-label" style={{ margin: '0 0 2px' }}>Today · {cfg.todayStr}</div>
+              <div className="h-day">DAY {dayNum}</div>
+            </div>
+            <Ring done={doneCount} total={total} />
+          </div>
 
-      <StatusBanner approved={approved} rejected={rejected} complete={complete} note={log?.judgeNote}
-        doneCount={doneCount} total={total} hasReferee={cfg.hasReferee} t={t} />
+          <StatusBanner approved={approved} rejected={rejected} complete={complete} note={log?.judgeNote}
+            doneCount={doneCount} total={total} hasReferee={cfg.hasReferee} t={t} />
+        </>
+      )}
 
       {myPlan && (
         <div className="macrobar">
@@ -198,8 +234,52 @@ export default function Today() {
         )
       })}
 
+      {weekly.length > 0 && (
+        <>
+          <div className="section-label" style={{ marginTop: 18 }}>This week</div>
+          {weekly.map((r) => {
+            const wp = wprog[r.id] || { done: 0, target: r.timesPerWeek || 1, met: false }
+            const onToday = entrySatisfies(r, log?.entriesByReq?.[r.id])
+            const badge = `${wp.done} of ${wp.target} this week`
+            if (r.kind === 'check') {
+              const busy = saving === r.id
+              return (
+                <button key={r.id} className={'watertoggle wk' + (onToday ? ' on' : '') + (wp.met ? ' met' : '')}
+                  onClick={() => toggleCheck(r)} disabled={!editable || busy} style={{ marginBottom: 8, opacity: busy ? 0.6 : undefined }}>
+                  <span className="wt-box" style={onToday ? { background: 'var(--blue)', borderColor: 'var(--blue)', color: '#fff' } : undefined}>{onToday && <Icon name="check" size={18} />}</span>
+                  <span style={{ flex: 1 }}>
+                    <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
+                    <span className="wt-hint" style={wp.met ? { color: 'var(--green)' } : undefined}>{busy ? 'Saving…' : `${badge}${onToday ? ' · logged today' : ''}`}</span>
+                  </span>
+                  <Icon name={r.icon || 'bolt'} size={22} style={{ color: wp.met ? 'var(--green)' : 'var(--muted-2)' }} />
+                </button>
+              )
+            }
+            return (
+              <div key={r.id} className={'wk-photo' + (wp.met ? ' met' : '')}>
+                <div className="wk-row">
+                  <span className="wk-title">{r.label}</span>
+                  <span className={'wk-badge' + (wp.met ? ' met' : '')}>{badge}</span>
+                </div>
+                <div className="slots-grid">
+                  <PhotoSlot req={r} entry={log?.entriesByReq?.[r.id]} editable={editable}
+                    uploading={uploading === r.id} onPick={(f) => onPick(r, f)} onClear={() => onClearPhotos(r)}
+                    mealMode={!!myPlan && isMealReq(r)}
+                    onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} />
+                </div>
+              </div>
+            )
+          })}
+        </>
+      )}
+
       {!editable && !approved && (
         <p className="center muted" style={{ fontSize: 12, marginTop: 16 }}>This day is locked — you can only log proof on the current day.</p>
+      )}
+
+      {celebrate && (
+        <DayComplete dayNum={dayNum} streak={(summaries[me.id]?.streak ?? 0) + 1}
+          name={challenge.name} onClose={() => setCelebrate(false)} />
       )}
 
       {captioning && (
@@ -377,6 +457,40 @@ function CaptionSheet({ req, entry, onSave, onClose }) {
         <button className="btn btn-go" disabled={busy || !text.trim()} onClick={submit}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </Sheet>
+  )
+}
+
+// Soft-mode hero: the big centered ring with the serif day number inside and
+// an encouraging voice line below. The small Ring stays untouched for dark mode.
+function SoftHero({ dayNum, done, total, date, complete, t }) {
+  return (
+    <div className="soft-hero">
+      <div className="section-label" style={{ margin: 0 }}>Today · {date}</div>
+      <HeroRing done={done} total={total} dayNum={dayNum} />
+      <p className="sh-line">
+        {complete ? t('today.hero.done') : t('today.hero.encourage', { k: total - done, total })}
+      </p>
+    </div>
+  )
+}
+
+function HeroRing({ done, total, dayNum }) {
+  const size = 190, sw = 10, r = size / 2 - sw - 2
+  const c = 2 * Math.PI * r
+  const off = c * (1 - (total ? done / total : 0))
+  const colr = done === total && total > 0 ? 'var(--green)' : 'var(--brand)'
+  const mid = size / 2
+  return (
+    <svg width={size} height={size} className="ring sh-ring">
+      <circle className="ring-bg" cx={mid} cy={mid} r={r} fill="none" strokeWidth={sw} />
+      <circle cx={mid} cy={mid} r={r} fill="none" strokeWidth={sw} stroke={colr}
+        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off}
+        style={{ transition: 'stroke-dashoffset .6s cubic-bezier(.2,.8,.2,1)' }} />
+      {/* .ring rotates -90deg; counter-rotate the text. Explicit y offsets, not
+          dominant-baseline (iOS Safari is unreliable with webfont metrics). */}
+      <text x={mid} y={mid - 4} textAnchor="middle" className="sh-day" transform={`rotate(90 ${mid} ${mid})`}>Day {dayNum}</text>
+      <text x={mid} y={mid + 26} textAnchor="middle" className="sh-count" transform={`rotate(90 ${mid} ${mid})`}>{done} of {total}</text>
+    </svg>
   )
 }
 

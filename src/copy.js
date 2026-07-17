@@ -126,6 +126,31 @@ const C = {
     coach: ({ total }) => `All ${total} in before midnight — you've got this.`,
     monk: ({ total }) => `${total} pieces of today remain. There is still time.`,
   },
+  // Soft-mode hero (Linen layout): the line under the big progress ring.
+  'today.hero.encourage': {
+    hardcore: ({ k }) => (k === 1 ? 'One left. Close it out.' : `${k} left. Keep it moving.`),
+    coach: ({ k }) => (k === 1 ? 'One to go. The day is almost yours.' : `${k} to go. You are closer than you think.`),
+    monk: ({ k }) => (k === 1 ? 'One remains. Finish gently.' : `${k} remain. One thing at a time.`),
+  },
+  'today.hero.done': {
+    hardcore: 'All in. Day secured.',
+    coach: 'Everything is in. Be proud of today.',
+    monk: 'The day is whole. Rest now.',
+  },
+
+  // ── day complete celebration (both modes) ──
+  'daycomplete.title': {
+    hardcore: ({ n }) => `Day ${n} done`,
+  },
+  'daycomplete.sub': {
+    hardcore: 'Every box checked. No excuses needed.',
+    coach: 'You showed up for yourself today. See you tomorrow.',
+    monk: 'Another stone laid on the path.',
+  },
+  'daycomplete.streak': {
+    hardcore: ({ n }) => `${n} day streak`,
+  },
+
   'today.aiflag.fallback': {
     hardcore: "this photo doesn't look like it matches the requirement.",
   },

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Capacitor } from '@capacitor/core'
 import * as api from './data.js'
-import { todayInTz, currentDayNumber, summarize, deriveFormat } from './lib/challenge.js'
-import { getStoredTheme, applyTheme, normalizeTheme, mapAccent } from './theme.js'
+import { todayInTz, currentDayNumber, summarize, deriveFormat, isLogComplete } from './lib/challenge.js'
+import { getStoredTheme, applyTheme, normalizeTheme, themeMode, mapAccent } from './theme.js'
 import { copyFor, getStoredTone, storeTone, normalizeTone } from './copy.js'
 import { AppCtx, useApp } from './appContext.js'
 import Icon from './components/Icons.jsx'
@@ -10,9 +10,10 @@ import YouSheet from './components/YouSheet.jsx'
 import Landing from './components/Landing.jsx'
 import Login from './components/Login.jsx'
 import ResetPassword from './components/ResetPassword.jsx'
-import Onboard from './components/Onboard.jsx'
+import OnboardCoach from './components/OnboardCoach.jsx'
 import Today from './components/Today.jsx'
 import Standings from './components/Standings.jsx'
+import RenameSheet from './components/RenameSheet.jsx'
 import History from './components/History.jsx'
 import Goals from './components/Goals.jsx'
 import JudgeQueue from './components/JudgeQueue.jsx'
@@ -38,6 +39,7 @@ export default function App() {
   const [theme, setThemeState] = useState(getStoredTheme)
   const [tone, setToneState] = useState(getStoredTone)
   const [youOpen, setYouOpen] = useState(false)
+  const [renaming, setRenaming] = useState(false)
 
   // Gate on userId: logged-out visitors keep the sunrise boot paint, and a
   // fresh visitor's mount must NOT persist 'midnight' to localStorage (that
@@ -45,8 +47,14 @@ export default function App() {
   useEffect(() => { if (userId) applyTheme(theme) }, [theme, userId])
   useEffect(() => { if (userId) storeTone(tone) }, [tone, userId])
   useEffect(() => {
-    const t = bundle?.profile?.theme
-    if (t && normalizeTheme(t) === t && t !== theme) setThemeState(t)
+    // Sync the NORMALIZED profile theme (retired colorways remap, e.g.
+    // blush→linen) and lazily write the remap back so the DB migrates itself
+    // on first load after a retirement. No-op when nothing changed.
+    const raw = bundle?.profile?.theme
+    if (!raw) return
+    const nt = normalizeTheme(raw)
+    if (nt !== theme) setThemeState(nt)
+    if (nt !== raw && userId) api.saveTheme(userId, nt).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle?.profile?.theme])
   useEffect(() => {
@@ -216,22 +224,24 @@ export default function App() {
     return (
       <div className="app-bg">
         <style>{THEME}</style>
-        <div className="splash"><span className="splash-mark">YOU</span></div>
+        <div className="splash">
+          <span className="splash-brand">
+            <img className="splash-logo" src="/logo-96.png" alt="" />
+            <span className="splash-word">You Mode</span>
+          </span>
+        </div>
       </div>
     )
   }
 
   if (!userId) {
     // Web visitors get the marketing landing; the native app opens straight
-    // on the (sunrise-styled) auth card, as App Store apps should.
+    // on the auth flow, as App Store apps should. Login self-wraps in .lin.
     return (
       <>
         <style>{THEME}</style>
         {Capacitor.isNativePlatform() ? (
-          <div className="sun-scope">
-            <div className="sun-bg" />
-            <Login onAuthed={onAuthed} initialMode="signin" />
-          </div>
+          <Login onAuthed={onAuthed} initialMode="signin" />
         ) : (
           <Landing onAuthed={onAuthed} />
         )}
@@ -248,7 +258,10 @@ export default function App() {
         <style>{THEME}</style>
         <div className="app-bg" />
         <div className="splash" style={{ flexDirection: 'column', gap: 18 }}>
-          <span className="splash-mark" style={{ animation: 'none', opacity: 1 }}>YOU</span>
+          <span className="splash-brand" style={{ animation: 'none' }}>
+            <img className="splash-logo" src="/logo-96.png" alt="" />
+            <span className="splash-word">You Mode</span>
+          </span>
           <p className="muted" style={{ fontSize: 14, margin: 0 }}>
             {bundle ? 'Your account needs to finish setup.' : "Can't reach the server right now."}
           </p>
@@ -265,7 +278,7 @@ export default function App() {
     return (
       <>
         <style>{THEME}</style>
-        <Onboard profile={bundle.profile} onDone={() => refresh()} signOut={signOut}
+        <OnboardCoach profile={bundle.profile} onDone={() => refresh()} signOut={signOut}
           theme={theme} tone={tone} pickTheme={pickTheme} pickTone={pickTone} />
       </>
     )
@@ -305,6 +318,7 @@ export default function App() {
     plans, weighIns, myPlan, myPlans,
     me, myMember, isReferee, summaries, reqsFor, logsFor, daysFor, maxDays, actions,
     t, tone,
+    theme, mode: themeMode(theme), // 'soft' (Linen) | 'dark' — screens branch layout on this
     view: activeView, setView,
   }
 
@@ -314,9 +328,16 @@ export default function App() {
       <div className="app-bg" />
       <div className="shell">
         <header className="topbar">
-          <div className="brand" title={active.challenge.name}>
-            <span className="brand-name">{active.challenge.name}</span>
-          </div>
+          {active.challenge.ownerId === me.id ? (
+            <button className="brand brand-edit" title="Rename challenge" onClick={() => setRenaming(true)}>
+              <span className="brand-name">{active.challenge.name}</span>
+              <Icon name="edit" size={12} className="brand-edit-ic" />
+            </button>
+          ) : (
+            <div className="brand" title={active.challenge.name}>
+              <span className="brand-name">{active.challenge.name}</span>
+            </div>
+          )}
           <div className="daypill">
             {dayNum < 1 ? <>STARTS SOON</> : dayNum > myDays ? <>COMPLETE</> : (
               <><span className="daypill-k">DAY</span><span className="daypill-n">{dayNum}</span><span className="daypill-t">/ {myDays}</span></>
@@ -351,6 +372,11 @@ export default function App() {
             onDeleteAccount={deleteAccount}
             onClose={() => setYouOpen(false)} />
         )}
+        {renaming && (
+          <RenameSheet current={active.challenge.name}
+            onSave={async (name) => { await api.renameChallenge(active.challenge.id, name); await refresh(); setRenaming(false) }}
+            onClose={() => setRenaming(false)} />
+        )}
 
         <main className="view">
           {activeView === 'today' && <Today />}
@@ -378,12 +404,9 @@ function JudgeBadge() {
   const { logs, participants, reqsFor } = useApp()
   let n = 0
   for (const l of logs) {
-    if (l.status !== 'pending') continue
-    const reqs = reqsFor(l.userId)
-    if (reqs.length && reqs.every((r) => {
-      const e = l.entriesByReq[r.id]
-      return r.kind === 'photo' ? !!e?.photoPath : !!e?.checked
-    })) n++
+    // Same completeness gate as the queue (isLogComplete) so the badge count
+    // and the queue never disagree — and so weekly items are excluded too.
+    if (l.status === 'pending' && isLogComplete(reqsFor(l.userId), l)) n++
   }
   if (!n || !participants.length) return null
   return <span className="tab-badge">{n}</span>
@@ -467,9 +490,16 @@ img{display:block;max-width:100%}
 }
 
 .splash{height:100vh;display:flex;align-items:center;justify-content:center}
-.splash-mark{font-family:var(--display);font-size:64px;color:var(--brand);letter-spacing:2px;
-  animation:pulse 1.1s ease-in-out infinite}
+/* Boot splash: the You Mode brand lockup (logo + serif wordmark), breathing
+   gently. Theme-adaptive via --text, so it reads on cream or navy alike. */
+.splash-brand{display:inline-flex;flex-direction:column;align-items:center;gap:13px;
+  animation:breath 1.9s ease-in-out infinite}
+.splash-logo{width:58px;height:58px;border-radius:16px;display:block}
+.splash-word{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:27px;
+  letter-spacing:.3px;color:var(--text)}
+@keyframes breath{0%,100%{opacity:.5}50%{opacity:1}}
 @keyframes pulse{0%,100%{opacity:.35;transform:scale(.97)}50%{opacity:1;transform:scale(1.02)}}
+@media (prefers-reduced-motion: reduce){ .splash-brand{animation:none;opacity:1} }
 
 .shell{max-width:600px;margin:0 auto;min-height:100vh;
   padding-bottom:calc(110px + env(safe-area-inset-bottom));position:relative}
@@ -483,6 +513,10 @@ img{display:block;max-width:100%}
 .brand::before{content:'';width:4px;height:20px;border-radius:2px;background:var(--brand);flex:none}
 .brand-name{font-family:var(--cond);font-weight:700;font-size:17px;letter-spacing:1px;text-transform:uppercase;
   color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.1}
+/* Owner can tap the challenge name in the header to rename it. */
+button.brand{background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.brand-edit-ic{color:var(--muted-2);flex:none;opacity:.7}
+button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .brand-mark{font-family:var(--display);font-size:26px;color:var(--brand);line-height:1;letter-spacing:1px}
 .brand-word{font-family:var(--cond);font-weight:700;font-size:18px;letter-spacing:3px;color:var(--text)}
 .rename-chip{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font:inherit}
@@ -798,6 +832,16 @@ img{display:block;max-width:100%}
   place-items:center;flex:none;transition:.15s}
 .watertoggle .wt-title{font-family:var(--cond);font-weight:600;font-size:15px}
 .watertoggle .wt-hint{font-size:12px;color:var(--muted)}
+/* Weekly-cadence items: the "This week" section (progress toward N/week) */
+.watertoggle.wk.met{border-color:color-mix(in srgb,var(--green) 45%,transparent);background:color-mix(in srgb,var(--green) 8%,transparent)}
+.wk-photo{margin-top:10px}
+.wk-photo .slots-grid{margin-top:8px;grid-template-columns:1fr}
+.wk-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 2px}
+.wk-title{font-family:var(--cond);font-weight:600;font-size:15px;color:var(--text)}
+.wk-badge{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--muted);padding:5px 10px;border-radius:99px;background:var(--panel-2);border:1px solid var(--line)}
+.wk-badge.met{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent);
+  background:color-mix(in srgb,var(--green) 10%,transparent)}
 
 .daybanner{margin-top:14px;padding:16px;border-radius:var(--r);text-align:center;border:1px solid var(--line)}
 .daybanner.done{background:linear-gradient(180deg,color-mix(in srgb,var(--green) 16%,transparent),color-mix(in srgb,var(--green) 3%,transparent));border-color:color-mix(in srgb,var(--green) 40%,transparent)}
@@ -809,6 +853,52 @@ img{display:block;max-width:100%}
 .ring{transform:rotate(-90deg)}
 .ring-bg{stroke:var(--panel-3)}
 .ring-label{font-family:var(--display);font-size:18px;fill:var(--text)}
+/* Standings garnish: sole-leader crown (both modes) + soft-mode mini rings */
+.lb-crown{color:var(--gold);margin-left:5px;vertical-align:-2px}
+.miniring{flex:none}
+/* Soft-mode Today hero (Linen layout) */
+.soft-hero{display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0 4px;text-align:center}
+.sh-ring{margin-top:2px}
+.sh-day{font-family:var(--title-font);font-size:34px;font-weight:600;fill:var(--text)}
+.sh-count{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:2px;fill:var(--muted);text-transform:uppercase}
+.sh-line{font-size:14.5px;color:var(--muted);max-width:300px;line-height:1.5;margin:0}
+/* Day Complete celebration: above tabbar (40) + modal (60), below lightbox (90) */
+.dc-overlay{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.dc-card{position:relative;width:100%;max-width:340px;text-align:center;background:var(--panel);
+  border:1px solid var(--line-2);border-radius:var(--r);padding:26px 22px 20px;
+  box-shadow:0 24px 70px -20px rgba(0,0,0,.35);animation:dc-in .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes dc-in{from{opacity:0;transform:scale(.92) translateY(14px)}to{opacity:1;transform:none}}
+.dc-eyebrow{display:inline-flex;align-items:center;gap:6px;font-family:var(--cond);font-weight:600;
+  font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.dc-eyebrow svg{color:var(--gold)}
+.dc-title{font-family:var(--title-font);font-weight:600;font-size:40px;letter-spacing:var(--title-track);
+  text-transform:var(--title-case);color:var(--text);margin:6px 0 14px;line-height:1.05}
+.dc-ring{display:block;margin:0 auto}
+.dc-arc{animation:dc-arc .9s cubic-bezier(.2,.8,.2,1)}
+@keyframes dc-arc{from{stroke-dashoffset:351}to{stroke-dashoffset:0}}
+.dc-check{font-size:34px;fill:var(--green)}
+.dc-sub{font-size:14px;color:var(--muted);line-height:1.55;margin:14px 0 0}
+.dc-streak{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:7px 14px;border-radius:99px;
+  background:color-mix(in srgb,var(--amber) 12%,transparent);border:1px solid color-mix(in srgb,var(--amber) 30%,transparent);
+  font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:.5px;color:var(--amber)}
+.dc-brand{margin-top:14px;font-family:var(--cond);font-weight:700;font-size:10px;letter-spacing:3px;color:var(--muted-2)}
+.dc-burst{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.dc-burst i{position:absolute;width:14px;height:14px;background:var(--gold);opacity:0;
+  clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);
+  animation:dc-pop 1.4s ease-out forwards}
+.dc-burst i:nth-child(1){left:16%;top:24%;animation-delay:.15s}
+.dc-burst i:nth-child(2){left:80%;top:20%;width:10px;height:10px;animation-delay:.3s}
+.dc-burst i:nth-child(3){left:70%;top:58%;animation-delay:.45s;background:var(--green)}
+.dc-burst i:nth-child(4){left:12%;top:62%;width:9px;height:9px;animation-delay:.55s}
+.dc-burst i:nth-child(5){left:48%;top:12%;width:11px;height:11px;animation-delay:.7s;background:var(--green)}
+.dc-burst i:nth-child(6){left:88%;top:42%;width:8px;height:8px;animation-delay:.85s}
+@keyframes dc-pop{0%{opacity:0;transform:scale(.2) rotate(0)}25%{opacity:1}
+  100%{opacity:0;transform:scale(1.5) rotate(90deg) translateY(-18px)}}
+@media (prefers-reduced-motion: reduce){
+  .dc-card,.dc-arc{animation:none}
+  .dc-burst{display:none}
+}
 
 /* calendar / history */
 .cal-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:5px}
@@ -855,6 +945,16 @@ img{display:block;max-width:100%}
 .weigh-input .u{color:var(--muted);font-size:11px;font-family:var(--cond);letter-spacing:1px;text-transform:uppercase;flex:none}
 .goal-top{display:flex;align-items:center;gap:10px;margin-bottom:4px}
 .goal-name{font-family:var(--title-font);font-weight:700;font-size:18px;letter-spacing:.5px}
+/* Editable professional-goal name: label with a hover pencil, or an inline editor. */
+.goal-label-row{display:flex;align-items:center;gap:8px}
+.goal-edit-btn{flex:none;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;
+  color:var(--muted-2);border:1px solid transparent}
+.goal-edit-btn:hover{color:var(--text);border-color:var(--line-2)}
+.goal-name-edit{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px}
+.goal-name-edit input{flex:1;min-width:140px;background:var(--panel);border:1px solid var(--line-2);border-radius:10px;
+  padding:9px 11px;color:var(--text);font-size:14px}
+.goal-name-edit input:focus{outline:none;border-color:color-mix(in srgb,var(--brand) 55%,transparent)}
+.lin .goal-name-edit input{background:var(--lpc-card);border-color:var(--lpc-line);color:var(--lpc-ink)}
 .goal-milestone{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
 .goal-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .counter{display:flex;align-items:center;gap:12px}
@@ -939,63 +1039,227 @@ img{display:block;max-width:100%}
   background:var(--red);color:var(--on-red);font-size:10px;font-family:var(--sans);font-weight:700;display:grid;place-items:center;padding:0 4px}
 
 /* login + onboarding */
-/* ── Sunrise landing page (logged-out web visitors) ── */
-.lp{max-width:600px;margin:0 auto;padding:0 22px calc(30px + env(safe-area-inset-bottom));color:var(--sun-text)}
-.lp-top{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;
-  padding:calc(12px + env(safe-area-inset-top)) 2px 12px;margin:0 -22px;padding-left:22px;padding-right:22px;
-  background:color-mix(in srgb, var(--sun-bg) 82%, transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
-.lp-lockup{font-family:var(--cond);font-weight:700;font-size:15px;letter-spacing:3px;color:var(--sun-text)}
-.lp-lockup b{color:var(--sun-brand);font-weight:700}
-.lp-signin{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;
-  color:var(--sun-muted);padding:8px 4px}
-.lp-signin:active{color:var(--sun-text)}
-.lp-hero{padding:54px 0 46px;text-align:left}
-.lp-mark{font-family:var(--display);font-size:64px;line-height:1;letter-spacing:2px;color:var(--sun-brand)}
-.lp-word{font-family:var(--cond);font-weight:700;font-size:22px;letter-spacing:8px;color:var(--sun-text);margin-top:-2px}
-.lp-hero h1{font-family:var(--cond);font-weight:700;font-size:31px;line-height:1.16;margin:26px 0 0;color:var(--sun-text)}
-.lp-sub{color:var(--sun-muted);font-size:15px;line-height:1.65;margin:14px 0 0}
-.lp-cta-row{display:flex;flex-direction:column;gap:12px;margin-top:26px}
-.lp-cta{font-family:var(--cond);font-weight:700;font-size:16px;letter-spacing:1.5px;text-transform:uppercase;
-  padding:16px 22px;border-radius:16px;background:linear-gradient(180deg,#FF9A6A,#FF6B4A);color:var(--sun-on-cta);
-  box-shadow:0 8px 28px rgba(255,107,74,.28), inset 0 1px 0 rgba(255,255,255,.25);
-  transition:transform .06s ease,filter .15s ease}
-.lp-cta:active{transform:scale(.98)}
-.lp-cta:hover{filter:brightness(1.06)}
-.lp-alt{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;
-  color:var(--sun-muted);text-decoration:underline;text-underline-offset:3px;padding:4px}
-.lp-beat{padding:30px 0;border-top:1px solid var(--sun-line)}
-.lp-num{font-family:var(--display);font-size:15px;letter-spacing:2px;color:var(--sun-gold);opacity:.9}
-.lp-beat h2{font-family:var(--cond);font-weight:700;font-size:22px;margin:8px 0 0;color:var(--sun-text)}
-.lp-beat p{color:var(--sun-muted);font-size:14.5px;line-height:1.6;margin:8px 0 0}
-.lp-mock{margin-top:16px;display:grid;gap:8px}
-.lp-mock-row{display:flex;align-items:center;gap:10px;background:var(--sun-card);border:1px solid var(--sun-line);
-  border-radius:12px;padding:11px 13px;font-size:14px;color:var(--sun-text)}
-.lp-mock-kind{font-size:11px;font-family:var(--cond);font-weight:600;letter-spacing:.5px;padding:4px 8px;
-  border-radius:8px;background:color-mix(in srgb, var(--sun-brand) 16%, transparent);color:var(--sun-brand);white-space:nowrap}
-.lp-mock-kind.check{background:color-mix(in srgb, var(--sun-amber) 16%, transparent);color:var(--sun-amber)}
-.lp-mock-chips{display:flex;flex-wrap:wrap;gap:8px}
-.lp-chip{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:.5px;padding:9px 14px;border-radius:11px;
-  background:var(--sun-card);border:1px solid var(--sun-line);color:var(--sun-muted)}
-.lp-chip.active{border-color:var(--sun-brand);color:var(--sun-brand)}
-.lp-mock-code{font-family:var(--display);font-size:30px;letter-spacing:8px;text-align:center;color:var(--sun-gold);
-  background:var(--sun-card);border:1px dashed color-mix(in srgb, var(--sun-gold) 45%, transparent);border-radius:14px;padding:14px}
-.lp-ai-chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--cond);font-weight:600;font-size:12px;
-  letter-spacing:.5px;padding:7px 12px;border-radius:999px;color:var(--sun-amber);
-  background:color-mix(in srgb, var(--sun-amber) 13%, transparent);border:1px solid color-mix(in srgb, var(--sun-amber) 32%, transparent)}
-.lp-swatches{display:flex;gap:12px;margin-top:16px}
-.lp-swatch{width:48px;height:48px;border-radius:14px;border:1px solid var(--sun-line);display:flex;gap:4px;
-  align-items:center;justify-content:center}
-.lp-swatch i{width:10px;height:10px;border-radius:50%}
-.lp-voices{display:grid;gap:8px;margin-top:14px}
-.lp-voice{background:var(--sun-card);border:1px solid var(--sun-line);border-radius:12px;padding:10px 13px}
-.lp-voice b{font-family:var(--cond);font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;
-  color:var(--sun-text);display:block}
-.lp-voice span{color:var(--sun-muted);font-size:12.5px}
-.lp-final{padding:44px 0 8px;text-align:center;border-top:1px solid var(--sun-line)}
-.lp-final h2{font-family:var(--display);font-weight:400;font-size:30px;letter-spacing:1px;color:var(--sun-text);margin:0 0 18px}
-.lp-final .lp-cta{width:100%}
-.lp-foot{padding:34px 0 8px;text-align:center;color:var(--sun-muted);font-size:12px}
-.lp-foot a{color:var(--sun-muted)}
+/* ── Landing (lp2) + first-run (.lin): editorial system in the Linen language.
+   Self-contained palette (logged-out pages can't rely on data-theme vars);
+   shared by the landing and every cream first-run surface. ── */
+.lp2,.lin{--lpc-bg:#F2ECDF;--lpc-card:#FBF6EA;--lpc-ink:#1E1810;--lpc-mut:#6E6151;
+  --lpc-line:rgba(42,32,20,.14);--lpc-sage:#C15A34;--lpc-gold:#B0862C;--lpc-red:#9A3B2B}
+/* Ink ramble: the voice moment goes dark. Overriding --lpc-* on the wrapper
+   retints every .lin element that reads them; the two hardcoded bits (primary
+   button text, mic gradient) get explicit dark-friendly overrides. */
+.lin.oc-ink{--lpc-bg:#14110D;--lpc-card:#1F1A13;--lpc-ink:#EFE7D8;--lpc-mut:#A99C88;
+  --lpc-line:rgba(239,231,216,.14);--lpc-sage:#D2794A;--lpc-gold:#E0B25A;--lpc-red:#E0714E;color-scheme:dark}
+.lin.oc-ink .btn-accent{color:#171209}
+.lin.oc-ink .oc-mic{background:linear-gradient(180deg,#D2794A,#B05A34);box-shadow:0 14px 40px -10px rgba(210,121,74,.45)}
+.lin.oc-ink .oc-chatbar textarea::placeholder,.lin.oc-ink .field input::placeholder{color:#8A8073}
+.lp2{background:var(--lpc-bg);color:var(--lpc-ink);min-height:100dvh}
+/* Live mode preview: tapping a card flips the whole page. Overriding --lpc-*
+   on .lp2.lp2-ink retints every token-based element in one shot; a transition
+   on the color-bearing surfaces turns the flip into a crossfade. */
+.lp2.lp2-ink{--lpc-bg:#14110D;--lpc-card:#1F1A13;--lpc-ink:#EFE7D8;--lpc-mut:#A99C88;
+  --lpc-line:rgba(239,231,216,.15);--lpc-sage:#D2794A;--lpc-gold:#E0B25A;--lpc-red:#E0714E;color-scheme:dark}
+.lp2,.lp2-nav,.lp2-word,.lp2-login,.lp2 h1,.lp2 h2,.lp2-sub,.lp2-p,.lp2-cta,.lp2-foot,.lp2-foot a,
+.lpm-frame,.lpm-screen,.lpm-tile,.lpm-date,.lpm-line,.tg-card,.tg-media,.tg-card figcaption,
+.lpm-day,.lpm-count,.lp2 section.lp2-dark,.lp2-dark h2,.lp2-dark .lp2-p{
+  transition:background-color .5s ease,color .5s ease,border-color .5s ease,fill .5s ease}
+.lp2-ink .lp2-cta{color:#171209}
+.lp2-ink .lp2-cta:hover{background:#E3D8C3}
+.lp2-nav{position:sticky;top:0;z-index:6;display:flex;align-items:center;justify-content:space-between;
+  padding:calc(12px + env(safe-area-inset-top)) 22px 12px;
+  background:color-mix(in srgb,var(--lpc-bg) 82%,transparent);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid color-mix(in srgb,var(--lpc-ink) 6%,transparent)}
+.lp2-brand{display:inline-flex;align-items:center;gap:9px}
+.lp2-logo{width:26px;height:26px;border-radius:8px;display:block}
+.lp2-word{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:19px}
+.lp2-login{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--lpc-mut);background:none;border:1px solid var(--lpc-line);border-radius:99px;padding:8px 16px;cursor:pointer}
+.lp2 section{padding:76px 24px;max-width:640px;margin:0 auto;text-align:center}
+.lp2-hero{padding-top:60px}
+.lp2-eyebrow{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:3px;text-transform:uppercase;
+  color:var(--lpc-sage);margin:0 0 16px}
+.lp2 h1{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:clamp(40px,11vw,72px);
+  line-height:1.06;letter-spacing:-.5px;margin:0}
+.lp2 h2{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:clamp(30px,8vw,48px);
+  line-height:1.1;margin:0 0 12px}
+.lp2-sub{font-size:16.5px;line-height:1.6;color:var(--lpc-mut);max-width:430px;margin:18px auto 0;text-wrap:balance}
+.lp2-p{font-size:15px;line-height:1.65;color:var(--lpc-mut);max-width:400px;margin:0 auto}
+.lp2-cta-row{display:flex;justify-content:center;margin-top:28px}
+.lp2-cta{font-family:var(--cond);font-weight:700;font-size:14px;letter-spacing:2px;text-transform:uppercase;
+  color:#FBF7EE;background:var(--lpc-ink);border:none;border-radius:99px;padding:17px 44px;cursor:pointer;
+  transition:transform .15s ease}
+.lp2-cta:active{transform:scale(.97)}
+.lp2-cta:hover{background:#20241B}
+/* Phone mock: a little Linen Today screen — the product is the hero image */
+.lpm{margin:54px auto 0;width:min(292px,78vw)}
+.lpm-frame{background:#20241B;border-radius:44px;padding:11px;box-shadow:0 34px 80px -26px rgba(32,36,27,.5)}
+.lpm-screen{background:var(--lpc-bg);border-radius:34px;padding:16px 16px 20px;overflow:hidden}
+.lpm-screen::before{content:'';display:block;width:72px;height:8px;border-radius:99px;background:#20241B;margin:0 auto 16px;opacity:.9}
+.lpm-date{font-family:var(--cond);font-weight:600;font-size:10px;letter-spacing:2.5px;text-transform:uppercase;
+  color:var(--lpc-mut);text-align:center}
+.lpm-ring{display:block;margin:12px auto 4px}
+/* The terracotta ring draws itself once on load, so the product feels alive. */
+.lpm-ring circle:nth-of-type(2){animation:lpm-draw 1.2s cubic-bezier(.35,0,.15,1) .95s both}
+@keyframes lpm-draw{from{stroke-dashoffset:289}to{stroke-dashoffset:96}}
+.lpm-day{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:24px;fill:var(--lpc-ink)}
+.lpm-count{font-family:var(--cond);font-weight:600;font-size:9px;letter-spacing:1.5px;fill:var(--lpc-mut)}
+.lpm-line{font-size:11.5px;color:var(--lpc-mut);text-align:center;margin:0 0 14px}
+.lpm-tile{display:flex;align-items:center;gap:9px;background:var(--lpc-card);border:1px solid var(--lpc-line);
+  border-radius:14px;padding:11px 12px;margin-top:8px;font-size:12.5px;font-weight:600;color:var(--lpc-ink);text-align:left}
+.lpm-tile>svg{color:var(--lpc-sage);flex:none}
+.lpm-check{margin-left:auto;width:20px;height:20px;border-radius:50%;flex:none;
+  background:var(--lpc-sage);color:#fff;display:grid;place-items:center}
+.lpm-tile.todo .lpm-check{background:transparent;border:1.5px solid var(--lpc-line)}
+/* Dark voice section: full-bleed sunrise ember with the breathing aura. The
+   section.lp2-dark specificity is deliberate: it has to beat the .lp2 section
+   640px cap, or the band floats as a marooned box on desktop. */
+.lp2 section.lp2-dark{max-width:none;background:#14110D;position:relative;overflow:hidden;padding:96px 24px}
+.lp2-dark .lp2-inner{max-width:640px;margin:0 auto;position:relative;z-index:1}
+.lp2-dark h2{color:#EFE7D8}
+.lp2-dark .lp2-p{color:#A99C88}
+/* Halftone corner — a whisper of the logo's stipple, faded on the diagonal. */
+.lp2-dark::after{content:'';position:absolute;top:0;right:0;width:230px;height:230px;pointer-events:none;z-index:0;
+  background-image:radial-gradient(#EFE7D8 1.1px,transparent 1.2px);background-size:9px 9px;
+  -webkit-mask-image:linear-gradient(225deg,rgba(0,0,0,.5),transparent 62%);mask-image:linear-gradient(225deg,rgba(0,0,0,.5),transparent 62%)}
+.lp2-aura{position:absolute;inset:0;pointer-events:none}
+.lp2-aura i{position:absolute;left:50%;top:44%;width:min(140vw,620px);aspect-ratio:1;
+  transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(circle, color-mix(in srgb,#D2794A 20%,transparent) 0%, transparent 62%);
+  animation:aura-breathe 3.4s ease-in-out infinite}
+.lp2-aura i:nth-child(2){width:min(100vw,470px);animation-delay:-1.7s;
+  background:radial-gradient(circle, color-mix(in srgb,#E0B25A 13%,transparent) 0%, transparent 60%)}
+.lp2-orb{width:88px;height:88px;border-radius:50%;margin:0 auto 28px;display:grid;place-items:center;color:#FBF3EA;
+  background:linear-gradient(180deg,#D2794A,#B05A34);box-shadow:0 14px 44px -8px rgba(210,121,74,.5)}
+/* Track grid: three ways a finished goal can look — photo, check, note.
+   Shows the "track it your way" idea instead of stating it. */
+.lp2-tg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:400px;margin:0 auto 34px}
+.tg-card{display:flex;flex-direction:column;align-items:center;gap:11px;margin:0}
+.tg-media{position:relative;width:100%;aspect-ratio:1;border-radius:18px;display:grid;place-items:center;
+  background:var(--lpc-card);border:1px solid var(--lpc-line);box-shadow:0 16px 34px -22px rgba(32,36,27,.5)}
+.tg-card figcaption{font-family:var(--cond);font-weight:500;font-size:11px;letter-spacing:.3px;
+  color:var(--lpc-mut);text-align:center;line-height:1.35;max-width:96px}
+/* photo tile: warm gradient "print" with a camera chip */
+.tg-photo{background:linear-gradient(150deg,#D9C2A2,#B98A61);border-color:transparent}
+.tg-cam{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#FBF3EA;
+  background:rgba(30,22,14,.34);backdrop-filter:blur(2px)}
+/* check tile: the whole tile is the win */
+.tg-check{color:var(--lpc-sage)}
+/* meal tile: a plate, logged */
+.tg-meal{color:var(--lpc-mut)}
+.tg-done{position:absolute;bottom:8px;right:8px;width:19px;height:19px;border-radius:50%;
+  background:var(--lpc-sage);color:#FBF3EA;display:grid;place-items:center;
+  box-shadow:0 0 0 3px var(--lpc-bg)}
+/* Two moods split */
+.lp2-modes-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:28px}
+/* Mode cards double as the live toggle: fixed swatch colors (each always
+   previews its own mode), a clear active ring, tactile press. */
+.lp2-mode{border-radius:20px;padding:28px 14px;border:1px solid transparent;cursor:pointer;
+  text-align:center;transition:transform .15s ease,box-shadow .2s ease}
+.lp2-mode:active{transform:scale(.98)}
+.lp2-mode.active{box-shadow:0 0 0 2px var(--lpc-sage)}
+.lp2-mode b{display:block;font-size:19px;font-weight:600;margin-bottom:5px}
+.lp2-mode span{display:block;font-size:12px;line-height:1.45}
+.lp2-mode.linen{background:#FBF6EA;border-color:rgba(42,32,20,.14);color:#1E1810}
+.lp2-mode.linen b{font-family:'Playfair Display',Georgia,serif}
+.lp2-mode.linen span{color:#6E6151}
+.lp2-mode.navy{background:#14110D;border-color:#14110D;color:#EFE7D8}
+.lp2-mode.navy b{font-family:var(--cond);text-transform:uppercase;letter-spacing:2.5px}
+.lp2-mode.navy span{color:#A99C88}
+/* The "Just talk" band is the constant contrast beat: dark on Paper, inverted
+   to cream on Ink, so there's always exactly one opposite section. */
+.lp2-ink section.lp2-dark{background:#F2ECDF}
+.lp2-ink .lp2-dark h2{color:#1E1810}
+.lp2-ink .lp2-dark .lp2-p{color:#6E6151}
+.lp2-ink .lp2-dark::after{background-image:radial-gradient(#17130E 1.1px,transparent 1.2px)}
+/* Closing poster: the logo as art, once, big, above the final call. */
+.lp2-final{padding-bottom:44px;border-top:1px solid var(--lpc-line)}
+.lp2-final-mark{width:130px;height:130px;border-radius:30px;display:block;margin:6px auto 22px}
+.lp2 ::selection{background:color-mix(in srgb,#C15A34 26%,transparent);color:#17130E}
+.lp2-dark ::selection{background:color-mix(in srgb,#D2794A 34%,transparent);color:#14110D}
+.lp2-foot{padding:6px 24px calc(30px + env(safe-area-inset-bottom));text-align:center;color:var(--lpc-mut);font-size:12px}
+.lp2-foot a{color:var(--lpc-mut)}
+/* Scroll-in reveals */
+.lp2-io{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.8,.2,1)}
+.lp2-io.in{opacity:1;transform:none}
+@media (min-width:720px){
+  .lp2 section{padding:110px 24px}
+  .lp2-hero{padding-top:84px}
+  .lpm{width:320px}
+  /* the ember band is now edge-to-edge, so grow the glow to fill it and give
+     the scene real vertical room instead of a squat letterbox */
+  .lp2 section.lp2-dark{padding:150px 24px}
+  .lp2-aura i{width:min(95vw,1180px);top:50%}
+  .lp2-aura i:nth-child(2){width:min(72vw,860px)}
+}
+@media (prefers-reduced-motion: reduce){
+  .lp2-io{opacity:1;transform:none;transition:none}
+  .lp2-aura i{animation:none;opacity:.6}
+  .lpm-ring circle:nth-of-type(2){animation:none}
+}
+
+/* ── .lin: the cream first-run scope (auth, reset, review side of onboarding).
+   Mirrors .sun-scope's fixed-bg + z-lift pattern. color-scheme:light matters:
+   a signed-out device can still carry a dark data-theme, and without it iOS
+   renders dark keyboards and selects over the cream. ── */
+.lin{min-height:100dvh;color:var(--lpc-ink);color-scheme:light}
+.lin-bg{position:fixed;inset:0;z-index:0;background:var(--lpc-bg)}
+.lin > *:not(.lin-bg){position:relative;z-index:1}
+/* cream twins of the .sun-scope overrides — additive, base rules untouched */
+.lin .field label{color:var(--lpc-mut)}
+.lin .field input,.lin .field select{background:var(--lpc-card);border-color:var(--lpc-line);color:var(--lpc-ink)}
+.lin .field input:focus{border-color:var(--lpc-sage)}
+.lin .field input::placeholder{color:#94988A}
+.lin input:-webkit-autofill{-webkit-box-shadow:0 0 0 40px var(--lpc-card) inset;-webkit-text-fill-color:var(--lpc-ink)}
+.lin .btn{background:transparent;border-color:var(--lpc-line);color:var(--lpc-ink)}
+.lin .btn-accent{background:var(--lpc-ink);border-color:var(--lpc-ink);color:#FBF7EE;border-radius:99px}
+.lin .btn-go{background:var(--lpc-sage);border-color:var(--lpc-sage);color:#fff}
+.lin .auth-flip,.lin .login-note,.lin .lb-back{color:var(--lpc-mut)}
+.lin .login-err{color:var(--lpc-red)}
+.lin .screen-title{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:28px;
+  letter-spacing:0;text-transform:none;color:var(--lpc-ink)}
+.lin .muted,.lin .section-label{color:var(--lpc-mut)}
+.lin .onb-wrap{color:var(--lpc-ink)}
+.lin .onb-dots i{background:color-mix(in srgb,var(--lpc-ink) 14%,transparent)}
+.lin .onb-dots i.on{background:var(--lpc-sage)}
+.lin .fmt-chip{background:var(--lpc-card);border-color:var(--lpc-line);color:var(--lpc-mut)}
+.lin .fmt-chip.active{border-color:var(--lpc-sage);color:var(--lpc-ink);background:var(--lpc-card)}
+.lin .fmt-chip.active svg{color:var(--lpc-sage)}
+.lin .builder-row{background:var(--lpc-card);border-color:var(--lpc-line)}
+.lin .builder-row input{color:var(--lpc-ink)}
+.lin .kind-toggle.photo{color:#4E6E8E;border-color:rgba(78,110,142,.5);background:rgba(78,110,142,.08)}
+.lin .kind-toggle.check{color:#8A6E9E;border-color:rgba(138,110,158,.5);background:rgba(138,110,158,.08)}
+.lin .br-del{color:var(--lpc-mut)}
+.lin .oc-stepper{background:var(--lpc-card);border-color:var(--lpc-line)}
+.lin .oc-stepper button{color:var(--lpc-mut)}
+.lin .oc-step-n{color:var(--lpc-ink)}
+.lin .theme-opt{background:var(--lpc-card);border:1px solid var(--lpc-line)}
+/* Selection tint stays inside the cream palette — the base .active uses
+   var(--panel-2), which is the GLOBAL theme's dark panel and turned selected
+   cards dark-on-dark once a user picked Ink. */
+.lin .theme-opt.active{border-color:var(--lpc-sage);background:color-mix(in srgb,var(--lpc-sage) 10%,var(--lpc-card))}
+.lin .theme-opt .to-label{color:var(--lpc-ink)}
+.lin .voice-opt .to-label small{color:var(--lpc-mut)}
+.lin .theme-opt .to-check{color:var(--lpc-sage)}
+.lin .code-big{color:var(--lpc-gold);background:var(--lpc-card);
+  border-color:color-mix(in srgb,var(--lpc-gold) 45%,transparent)}
+/* staged auth flow */
+.au-wrap{max-width:440px;margin:0 auto;min-height:100dvh;
+  padding:calc(14px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom))}
+.au-top{position:relative;display:flex;align-items:center;justify-content:center;padding:8px 0 30px}
+.au-brand{display:inline-flex;align-items:center;gap:9px}
+.au-logo{width:26px;height:26px;border-radius:8px;display:block}
+.au-word{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:19px;color:var(--lpc-ink)}
+.au-back{position:absolute;left:-8px;top:2px;padding:8px 10px;color:var(--lpc-mut);background:none;border:none;
+  font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
+.au-step{animation:au-in .45s cubic-bezier(.2,.8,.2,1) both}
+@keyframes au-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.au-greet{font-family:'Playfair Display',Georgia,serif;font-style:italic;font-size:17px;
+  color:var(--lpc-sage);margin:0 0 10px}
+.au-q{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:clamp(30px,8.5vw,40px);
+  line-height:1.12;color:var(--lpc-ink);margin:0 0 10px}
+.au-sub{font-size:14.5px;line-height:1.6;color:var(--lpc-mut);margin:0 0 22px;max-width:340px}
+.au-ghost{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.au-step{animation:none}}
 
 .login-wrap{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;
   padding:calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom))}
@@ -1052,6 +1316,70 @@ img{display:block;max-width:100%}
 .sun-scope .field select{background:var(--sun-card);border-color:var(--sun-line);color:var(--sun-text)}
 .auth-flip{display:block;width:100%;text-align:center;color:var(--muted);font-size:13px;margin-top:14px;text-decoration:underline;text-underline-offset:3px}
 
+/* Talk-to-build onboarding (voice-first) */
+.oc-mic-row{display:flex;flex-direction:column;align-items:center;gap:9px;margin:20px 0 4px}
+.oc-mic{width:88px;height:88px;border-radius:50%;border:none;display:grid;place-items:center;color:#fff;
+  background:linear-gradient(180deg,#FF9A6A,#FF6B4A);box-shadow:0 12px 34px -8px rgba(255,107,74,.6);cursor:pointer}
+.oc-mic.rec{background:linear-gradient(180deg,#FF5A4A,#E23B2B);animation:ocpulse 1.5s ease-in-out infinite}
+.oc-mic:disabled{opacity:.55;cursor:default}
+@keyframes ocpulse{0%,100%{box-shadow:0 0 0 0 rgba(226,59,43,.5)}50%{box-shadow:0 0 0 16px rgba(226,59,43,0)}}
+.oc-mic-hint{font-size:12.5px;color:var(--sun-muted)}
+.oc-hint-busy{animation:pulse 1.4s ease-in-out infinite}
+/* Breathing sunrise aura behind the mic while recording/transcribing. First
+   child of the ramble step so it paints behind the content but over .sun-bg. */
+.oc-aura{position:fixed;inset:0;pointer-events:none;animation:aura-in .6s ease-out}
+.oc-aura i{position:absolute;left:50%;top:36%;width:min(150vw,680px);aspect-ratio:1;
+  transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(circle, color-mix(in srgb,var(--sun-brand) 24%,transparent) 0%, transparent 62%);
+  animation:aura-breathe 3.4s ease-in-out infinite}
+.oc-aura i:nth-child(2){width:min(115vw,520px);animation-delay:-1.7s;
+  background:radial-gradient(circle, color-mix(in srgb,var(--sun-amber) 18%,transparent) 0%, transparent 60%)}
+.oc-aura.thinking i{animation-duration:1.7s}
+@keyframes aura-in{from{opacity:0}to{opacity:1}}
+@keyframes aura-breathe{0%,100%{transform:translate(-50%,-50%) scale(.88);opacity:.55}
+  50%{transform:translate(-50%,-50%) scale(1.14);opacity:1}}
+@media (prefers-reduced-motion: reduce){.oc-aura i{animation:none;opacity:.7}.oc-hint-busy{animation:none}}
+.oc-timer{font-family:var(--cond);font-weight:600;font-size:16px;letter-spacing:1px;color:var(--sun-text)}
+.oc-cancel{background:none;border:none;color:var(--sun-muted);font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.oc-chatbar{display:flex;gap:8px;align-items:flex-end}
+.oc-chatbar textarea{flex:1;background:var(--sun-card);border:1px solid var(--sun-line);border-radius:14px;
+  padding:12px 14px;color:var(--sun-text);font:inherit;font-size:15px;line-height:1.4;resize:none}
+.oc-chatbar textarea:focus{outline:none;border-color:var(--sun-brand)}
+.oc-chatbar textarea::placeholder{color:var(--sun-muted)}
+.oc-send{flex:none;width:46px;height:46px;padding:0;border-radius:50%;display:grid;place-items:center}
+.oc-msgs{display:flex;flex-direction:column;gap:10px;margin:6px 0 12px;max-height:52vh;overflow-y:auto;overscroll-behavior:contain}
+.sun-scope .cm{max-width:88%;padding:11px 14px;border-radius:16px;font-size:14px;line-height:1.5;white-space:pre-wrap}
+.sun-scope .cm.ai{align-self:flex-start;background:var(--sun-card);border:1px solid var(--sun-line);border-bottom-left-radius:6px;color:var(--sun-text)}
+.sun-scope .cm.user{align-self:flex-end;background:color-mix(in srgb,var(--sun-brand) 15%,transparent);
+  border:1px solid color-mix(in srgb,var(--sun-brand) 32%,transparent);border-bottom-right-radius:6px;color:var(--sun-text)}
+.sun-scope .cm.thinking{color:var(--sun-muted);font-style:italic;animation:pulse 1.2s ease-in-out infinite}
+/* ── voice flow in the cream Linen world (the whole talk-to-build journey) ──
+   The mic is the one warm focal point, in clay (Linen's own accent) rather
+   than the off-brand sunrise coral. */
+.lin .oc-mic{background:linear-gradient(180deg,#C68A6C,#A9503C);box-shadow:0 14px 40px -10px rgba(169,80,60,.5)}
+.lin .oc-mic.rec{background:linear-gradient(180deg,#B85C48,#8E3B2B);animation-name:ocpulse-lin}
+@keyframes ocpulse-lin{0%,100%{box-shadow:0 0 0 0 rgba(142,59,43,.4)}50%{box-shadow:0 0 0 16px rgba(142,59,43,0)}}
+.lin .oc-mic-hint,.lin .oc-cancel{color:var(--lpc-mut)}
+.lin .oc-timer{color:var(--lpc-ink)}
+.lin .oc-aura i{background:radial-gradient(circle, color-mix(in srgb,#A9503C 15%,transparent) 0%, transparent 62%)}
+.lin .oc-aura i:nth-child(2){background:radial-gradient(circle, color-mix(in srgb,#C68A6C 13%,transparent) 0%, transparent 60%)}
+.lin .oc-chatbar textarea{background:var(--lpc-card);border-color:var(--lpc-line);color:var(--lpc-ink)}
+.lin .oc-chatbar textarea:focus{border-color:var(--lpc-sage)}
+.lin .oc-chatbar textarea::placeholder{color:#94988A}
+.lin .cm{max-width:88%;padding:11px 14px;border-radius:16px;font-size:14px;line-height:1.5;white-space:pre-wrap}
+.lin .cm.ai{align-self:flex-start;background:var(--lpc-card);border:1px solid var(--lpc-line);border-bottom-left-radius:6px;color:var(--lpc-ink)}
+.lin .cm.user{align-self:flex-end;background:color-mix(in srgb,var(--lpc-sage) 16%,transparent);
+  border:1px solid color-mix(in srgb,var(--lpc-sage) 34%,transparent);border-bottom-right-radius:6px;color:var(--lpc-ink)}
+.lin .cm.thinking{color:var(--lpc-mut);font-style:italic;animation:pulse 1.2s ease-in-out infinite}
+.oc-daybox{display:flex;gap:10px}
+.oc-daybox .field{flex:1}
+.oc-stepper{display:flex;align-items:center;justify-content:space-between;gap:4px;
+  background:var(--sun-card);border:1px solid var(--sun-line);border-radius:13px;padding:5px}
+.oc-stepper button{width:40px;height:38px;display:grid;place-items:center;border:none;border-radius:9px;
+  background:transparent;color:var(--sun-muted);cursor:pointer}
+.oc-stepper button:active{background:color-mix(in srgb,var(--sun-brand) 14%,transparent);color:var(--sun-text)}
+.oc-step-n{font-family:var(--cond);font-weight:600;font-size:15px;letter-spacing:.5px;color:var(--sun-text);white-space:nowrap}
+
 .onb-wrap{max-width:600px;margin:0 auto;min-height:100vh;
   padding:calc(26px + env(safe-area-inset-top)) 18px calc(60px + env(safe-area-inset-bottom))}
 .onb-choice{display:grid;gap:12px;margin-top:18px}
@@ -1067,8 +1395,9 @@ img{display:block;max-width:100%}
 .fmt-chip.active svg{color:var(--brand)}
 .builder-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
   border-radius:13px;padding:9px 10px;margin-bottom:8px}
-.builder-row input{background:transparent;border:none;color:var(--text);font-size:14px;min-width:0}
-.builder-row input:focus{outline:none}
+.builder-row input,.builder-row textarea{background:transparent;border:none;color:var(--text);font-size:14px;min-width:0;font-family:inherit}
+.builder-row input:focus,.builder-row textarea:focus{outline:none}
+.builder-row textarea{resize:none;overflow:hidden;line-height:1.35;width:100%;display:block;padding:0}
 .builder-row .br-label{flex:1.2;font-weight:600}
 .builder-row .br-hint{flex:1;color:var(--muted);font-size:12px}
 .kind-toggle{flex:none;font-family:var(--cond);font-size:10px;letter-spacing:1px;text-transform:uppercase;
@@ -1077,6 +1406,41 @@ img{display:block;max-width:100%}
 .kind-toggle.check{color:var(--purple);border-color:color-mix(in srgb,var(--purple) 50%,transparent);background:color-mix(in srgb,var(--purple) 8%,transparent)}
 .br-del{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--muted-2)}
 .br-del:hover{color:var(--red)}
+/* Cadence editor: a builder row that also carries a daily/weekly choice stacks
+   its controls (.br-main) above a cadence sub-row (.br-cadence). */
+.builder-row.br-multi{flex-direction:column;align-items:stretch;gap:8px}
+.br-main{display:flex;align-items:flex-start;gap:8px}
+/* Label + hint stack full-width so long titles wrap instead of clipping. */
+.br-fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;padding-top:5px}
+.br-main .br-label{font-weight:600}
+.br-main .br-hint{color:var(--muted);font-size:12px}
+.br-cadence{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-left:2px}
+.freq-toggle{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden}
+.freq-toggle button{font-family:var(--cond);font-size:11px;letter-spacing:.4px;padding:6px 11px;
+  color:var(--muted);background:transparent;border:none;cursor:pointer}
+.freq-toggle button+button{border-left:1px solid var(--line-2)}
+.freq-toggle button.on{background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand)}
+.freq-times{display:inline-flex;align-items:center;gap:8px}
+.freq-times button{width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--line-2);
+  border-radius:8px;color:var(--muted);background:transparent;cursor:pointer}
+.freq-times button:active{color:var(--text)}
+.freq-times span{font-family:var(--cond);font-size:12px;color:var(--text);min-width:74px;text-align:center}
+.lin .freq-toggle,.lin .freq-times button{border-color:var(--lpc-line)}
+.lin .freq-toggle button+button{border-color:var(--lpc-line)}
+.lin .freq-toggle button{color:var(--lpc-mut)}
+.lin .freq-toggle button.on{background:color-mix(in srgb,var(--lpc-gold) 16%,transparent);color:var(--lpc-gold)}
+.lin .freq-times button{color:var(--lpc-mut)}
+.lin .freq-times span{color:var(--lpc-ink)}
+/* Opt-in body-goal card in the voice-onboarding review (cream Linen scope). */
+.oc-plan{margin-top:16px;border:1px solid var(--lpc-line);border-radius:16px;padding:14px;background:var(--lpc-card)}
+.oc-plan-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.oc-plan-toggle{font-family:var(--cond);font-size:11px;letter-spacing:.5px;text-transform:uppercase;
+  padding:5px 12px;border-radius:99px;border:1px solid var(--lpc-line);color:var(--lpc-mut);background:transparent;cursor:pointer}
+.oc-plan-toggle.on{background:color-mix(in srgb,var(--lpc-sage) 22%,transparent);color:var(--lpc-ink);
+  border-color:color-mix(in srgb,var(--lpc-sage) 55%,transparent)}
+.oc-plan-goal{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:17px;color:var(--lpc-ink);margin:2px 0 10px}
+.lin .oc-plan .pp-grid{color:var(--lpc-mut)}
+.lin .oc-plan .pp-grid b{color:var(--lpc-ink)}
 .code-big{font-family:var(--display);font-size:52px;letter-spacing:10px;text-align:center;color:var(--gold);
   background:var(--panel);border:1px dashed color-mix(in srgb,var(--gold) 50%,transparent);border-radius:18px;padding:20px 10px;margin:14px 0}
 
@@ -1106,66 +1470,57 @@ img{display:block;max-width:100%}
 .theme-swatch{width:36px;height:36px;border-radius:11px;border:1px solid var(--line-2);flex:none;
   display:flex;gap:4px;align-items:center;justify-content:center}
 .theme-swatch i{width:9px;height:9px;border-radius:50%;display:block}
+/* Mode picker: two big experience cards (Linen / Navy, + legacy Midnight) */
+.mode-card{padding:14px;align-items:center}
+.mode-card .to-label small{display:block;font-family:var(--body,Inter,sans-serif);font-weight:400;font-size:12px;
+  letter-spacing:0;text-transform:none;margin-top:3px;opacity:.75}
+.mode-preview{width:58px;height:58px;border-radius:14px;border:1px solid var(--line-2);flex:none;
+  display:flex;flex-wrap:wrap;align-content:center;justify-content:center;column-gap:4px;padding:6px}
+.mode-preview .mp-aa{width:100%;text-align:center;font-size:20px;font-weight:600;line-height:1;margin-bottom:4px}
+.mode-preview i{width:8px;height:8px;border-radius:50%;display:inline-block}
 
-/* ── colorways ── */
-:root[data-theme="espresso"]{
-  --bg:#120D0A; --panel:#1E1712; --panel-2:#261D16; --panel-3:#302419;
-  --line:rgba(255,240,225,.08); --line-2:rgba(255,240,225,.16);
-  --text:#F7F0E8; --muted:#A69486; --muted-2:#776557;
-  --red:#FF6B57; --green:#3FD672; --gold:#FFCE54; --amber:#FFA24A; --blue:#6FA9FF; --purple:#C98BF2;
-  --brand:#FF3B30; --on-accent:#1A120C; --ring:rgba(255,240,225,.1);
-  --glow-1:#241511; --glow-2:#1E150E; --glow-fade:rgba(18,13,10,0);
-}
+/* ── the two experiences (+ hidden legacy Midnight = bare :root) ── */
+/* ── Ink: the dark expression of the same monochrome-editorial identity —
+   warm near-black + paper + the shared terracotta spot. (theme key stays
+   "navy" so no stored-state migration; only the look + label change.) ── */
 :root[data-theme="navy"]{
-  --bg:#070D17; --panel:#101A2A; --panel-2:#152135; --panel-3:#1C2A42;
-  --line:rgba(210,230,255,.09); --line-2:rgba(210,230,255,.17);
-  --text:#F2F6FC; --muted:#8FA2BA; --muted-2:#64778F;
-  --red:#FF5C6C; --green:#2FD584; --gold:#FFD34D; --amber:#FFB020; --blue:#4DA3FF; --purple:#A78BFF;
-  --brand:#FF3B30; --on-accent:#081020; --ring:rgba(210,230,255,.1);
-  --glow-1:#131C33; --glow-2:#0C1F2E; --glow-fade:rgba(7,13,23,0);
+  --bg:#14110D; --panel:#1E1A14; --panel-2:#26211A; --panel-3:#312A20;
+  --line:rgba(239,231,216,.10); --line-2:rgba(239,231,216,.18);
+  --text:#EFE7D8; --muted:#A99C88; --muted-2:#7B7160;
+  --red:#E0714E; --green:#8FB073; --gold:#E0B25A; --amber:#D98A4A; --blue:#B29A7E; --purple:#B79E86;
+  --brand:#D2794A; --on-accent:#171209; --ring:rgba(239,231,216,.12);
+  --glow-1:#241D14; --glow-2:#1B1710; --glow-fade:rgba(20,17,13,0);
 }
-:root[data-theme="sand"]{
-  color-scheme:light;
-  --bg:#EAE0CE; --panel:#F4EDDF; --panel-2:#EDE4D2; --panel-3:#DFD3BC;
-  --line:rgba(62,48,35,.14); --line-2:rgba(62,48,35,.26);
-  --text:#2E241B; --muted:#6A594A; --muted-2:#8D7C6A;
-  --red:#B23A2E; --green:#276B3C; --gold:#7A5E0C; --amber:#9B5210; --blue:#2F5F8F; --purple:#79489B;
-  --brand:#A9382A;
-  --on-accent:#F7F0E2; --on-green:#F2F7EE; --on-amber:#FFF3E4; --ring:rgba(62,48,35,.18);
-  --glow-1:#F3E7CD; --glow-2:#E7DCCB; --glow-fade:rgba(234,224,206,0);
-  --gc-face1:#DDE8D2; --gc-face2:#C9DAC0; --gc-star:rgba(39,107,60,.9);
-}
-/* iOS standalone: white status text needs a dark seat on the light theme */
-:root[data-theme="sand"] body::before{content:'';position:fixed;top:0;left:0;right:0;
-  height:env(safe-area-inset-top);background:#241B12;z-index:98;pointer-events:none}
 
-/* ── Blush: SGS-inspired look pack — cream + pastels + indigo + serif ── */
-:root[data-theme="blush"]{
+/* ── Paper: monochrome editorial — warm cream + near-black ink + one
+   terracotta spot + serif. Echoes the B&W stippled logo. (theme key stays
+   "linen" so no stored-state migration; only the look + label change.) ── */
+:root[data-theme="linen"]{
   color-scheme:light;
-  --bg:#F8F1EA; --panel:#FFFFFF; --panel-2:#F6EDE4; --panel-3:#EDDFD4;
-  --line:rgba(123,79,98,.14); --line-2:rgba(123,79,98,.26);
-  --text:#3B3A6E; --muted:#635D85; --muted-2:#8F89AC;
-  --red:#B23A50; --green:#2F6E57; --gold:#8A6A14; --amber:#A4551C; --blue:#3E6BB4; --purple:#7B4E9E;
-  --brand:#A34A60;
-  --on-accent:#FBF4EE; --on-green:#F1F7F2; --on-amber:#FFF4E8; --on-red:#FFF6F4;
-  --ring:rgba(59,58,110,.18);
-  --glow-1:#F7E1E0; --glow-2:#E4EBF7; --glow-fade:rgba(248,241,234,0);
-  --gc-face1:#E4F0E5; --gc-face2:#D2E6D8; --gc-star:rgba(47,110,87,.9);
+  --bg:#F2ECDF; --panel:#FBF6EA; --panel-2:#ECE2D0; --panel-3:#E0D4BE;
+  --line:rgba(42,32,20,.13); --line-2:rgba(42,32,20,.24);
+  --text:#1E1810; --muted:#6E6151; --muted-2:#9A8C78;
+  --red:#9A3B2B; --green:#5E7449; --gold:#B0862C; --amber:#C08236; --blue:#7C6C57; --purple:#8A7360;
+  --brand:#C15A34;
+  --on-accent:#FBF3EA; --on-green:#F5F4EC; --on-amber:#FFF6EC; --on-red:#FFF3EE;
+  --ring:rgba(42,32,20,.16);
+  --glow-1:#ECE0C9; --glow-2:#E9DEC6; --glow-fade:rgba(242,236,223,0);
+  --gc-face1:#F0DBCC; --gc-face2:#E9C9B5; --gc-star:rgba(193,90,52,.9);
   --r:22px; --r-sm:14px;
   --title-font:'Playfair Display',Georgia,serif; --title-track:0; --title-case:none;
   --num-font:'Playfair Display',Georgia,serif;
-  --daypill-bg:#F9E0CD; --score-bg:#E7E1F6; --water-bg:#DCE9F7;
-  --macro-bg:#DDEEDE; --goalcard-bg:#F8DCE3; --row-me-bg:#F3E6EC;
+  --daypill-bg:#F0DFCB; --score-bg:#ECE1CE; --water-bg:#E9DFCB;
+  --macro-bg:#ECE1CE; --goalcard-bg:#F2DCCD; --row-me-bg:#EEE4D0;
 }
-/* iOS standalone: dark indigo seat for white status text */
-:root[data-theme="blush"] body::before{content:'';position:fixed;top:0;left:0;right:0;
-  height:env(safe-area-inset-top);background:#2E2B52;z-index:98;pointer-events:none}
-/* Playfair metrics vs Anton condensed: size/weight compensation, blush only */
-:root[data-theme="blush"] .screen-title{font-size:28px;font-weight:600}
-:root[data-theme="blush"] .vs-day{font-size:52px;font-weight:600}
-:root[data-theme="blush"] .today-hero .h-day{font-size:36px;font-weight:600}
-:root[data-theme="blush"] .daypill-n{font-size:18px;font-weight:600}
-:root[data-theme="blush"] .tc-count{font-size:22px;font-weight:600}
-:root[data-theme="blush"] .bg-now .n{font-size:38px;font-weight:600}
-:root[data-theme="blush"] .lb-days{font-size:17px;font-weight:600}
+/* iOS standalone: warm-ink seat for the white status text */
+:root[data-theme="linen"] body::before{content:'';position:fixed;top:0;left:0;right:0;
+  height:env(safe-area-inset-top);background:#2A2018;z-index:98;pointer-events:none}
+/* Playfair metrics vs Anton condensed: size/weight compensation, linen only */
+:root[data-theme="linen"] .screen-title{font-size:28px;font-weight:600}
+:root[data-theme="linen"] .vs-day{font-size:52px;font-weight:600}
+:root[data-theme="linen"] .today-hero .h-day{font-size:36px;font-weight:600}
+:root[data-theme="linen"] .daypill-n{font-size:18px;font-weight:600}
+:root[data-theme="linen"] .tc-count{font-size:22px;font-weight:600}
+:root[data-theme="linen"] .bg-now .n{font-size:38px;font-weight:600}
+:root[data-theme="linen"] .lb-days{font-size:17px;font-weight:600}
 `

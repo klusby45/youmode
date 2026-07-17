@@ -5,6 +5,7 @@ import { currentDayNumber, logDone, logTotal, isLogComplete } from '../lib/chall
 import Icon from './Icons.jsx'
 import DayProof from './DayProof.jsx'
 import Sheet from './Sheet.jsx'
+import RenameSheet from './RenameSheet.jsx'
 
 // Chip/icon structure is fixed; labels come from the user's voice.
 const tcStatus = (t) => ({
@@ -15,7 +16,7 @@ const tcStatus = (t) => ({
 })
 
 export default function Standings() {
-  const { cfg, challenge, members, participants, summaries, logs, reqsFor, me, daysFor, maxDays, actions, t } = useApp()
+  const { cfg, challenge, members, participants, summaries, logs, reqsFor, me, daysFor, maxDays, actions, t, mode } = useApp()
   const [proof, setProof] = useState(null)
   const [renaming, setRenaming] = useState(false)
   const amOwner = challenge.ownerId === me.id
@@ -26,6 +27,13 @@ export default function Standings() {
   const format = cfg.format
   const solo = format === 'solo'
   const stakers = participants.filter((p) => p.stakeText)
+  // Sole leader by approved days gets a crown; ties (or zero) crown no one.
+  const leaderId = (() => {
+    if (participants.length < 2) return null
+    const r = [...participants].sort((a, b) => (summaries[b.userId]?.approved ?? 0) - (summaries[a.userId]?.approved ?? 0))
+    const top = summaries[r[0]?.userId]?.approved ?? 0
+    return top > 0 && top > (summaries[r[1]?.userId]?.approved ?? 0) ? r[0].userId : null
+  })()
   const title = solo ? t('standings.title.solo')
     : format === 'accountability' ? t('standings.title.accountability')
     : t('standings.title.group')
@@ -48,12 +56,13 @@ export default function Standings() {
       </div>
 
       {format === 'community' ? (
-        <Leaderboard participants={participants} summaries={summaries} daysFor={daysFor} meId={me.id} />
+        <Leaderboard participants={participants} summaries={summaries} daysFor={daysFor} meId={me.id}
+          leaderId={leaderId} soft={mode === 'soft'} />
       ) : (
         <div className={'scoreboard' + (solo ? ' solo' : format === 'accountability' ? ' grid' : '')}>
           {participants.map((p, i) => (
             <Fragment key={p.id}>
-              <Column s={summaries[p.userId]} p={p} totalDays={daysFor(p.userId)} />
+              <Column s={summaries[p.userId]} p={p} totalDays={daysFor(p.userId)} isLeader={p.userId === leaderId} />
               {format === 'versus' && i === 0 && participants.length === 2 && <div className="vs-divider">VS</div>}
             </Fragment>
           ))}
@@ -117,7 +126,7 @@ export default function Standings() {
 
 // Community scoreboard: compact ranked rows instead of side-by-side columns —
 // scales past two people and stays readable on a phone.
-function Leaderboard({ participants, summaries, daysFor, meId }) {
+function Leaderboard({ participants, summaries, daysFor, meId, leaderId, soft }) {
   const ranked = [...participants].sort((a, b) => (summaries[b.userId]?.approved ?? 0) - (summaries[a.userId]?.approved ?? 0))
   return (
     <div className="leaderboard">
@@ -127,10 +136,17 @@ function Leaderboard({ participants, summaries, daysFor, meId }) {
           <div key={p.id} className={'lb-row' + (p.userId === meId ? ' me' : '')}>
             <span className="lb-rank">{i + 1}</span>
             <span className="vs-dot" style={{ background: p.accent }} />
-            <span className="lb-name">{p.displayName}</span>
+            <span className="lb-name">
+              {p.displayName}
+              {p.userId === leaderId && <Icon name="crown" size={13} className="lb-crown" />}
+            </span>
             <span className="lb-streak"><Icon name="flame" size={13} fill="var(--amber)" />{s.streak ?? 0}</span>
-            <span className="lb-days" style={{ color: p.accent }}>{s.approved ?? 0}<small>/{daysFor(p.userId)}</small></span>
-            <span className="lb-bar"><span className="lb-fill" style={{ width: (s.completionPct ?? 0) + '%', background: p.accent }} /></span>
+            <span className="lb-days" style={{ color: p.accent }}>{s.approved ?? 0}<small> passed</small></span>
+            {soft ? (
+              <MiniRing pct={s.completionPct ?? 0} color={p.accent} />
+            ) : (
+              <span className="lb-bar"><span className="lb-fill" style={{ width: (s.completionPct ?? 0) + '%', background: p.accent }} /></span>
+            )}
           </div>
         )
       })}
@@ -138,12 +154,29 @@ function Leaderboard({ participants, summaries, daysFor, meId }) {
   )
 }
 
-function Column({ s, p, totalDays }) {
+// Soft-mode leaderboard garnish: a delicate 22px arc instead of the flat bar.
+function MiniRing({ pct, color }) {
+  const r = 8.5
+  const c = 2 * Math.PI * r
+  return (
+    <svg width="22" height="22" className="ring miniring" aria-hidden="true">
+      <circle className="ring-bg" cx="11" cy="11" r={r} fill="none" strokeWidth="3" />
+      <circle cx="11" cy="11" r={r} fill="none" strokeWidth="3" stroke={color} strokeLinecap="round"
+        strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(100, pct) / 100)} />
+    </svg>
+  )
+}
+
+function Column({ s, p, totalDays, isLeader }) {
   if (!s || !p) return null
   return (
     <div className="vs-col">
-      <div className="vs-name"><span className="vs-dot" style={{ background: p.accent }} />{p.displayName}</div>
-      <div className="vs-day" style={{ color: p.accent }}>{s.approved}<small> /{totalDays}</small></div>
+      <div className="vs-name">
+        <span className="vs-dot" style={{ background: p.accent }} />
+        {p.displayName}
+        {isLeader && <Icon name="crown" size={14} className="lb-crown" />}
+      </div>
+      <div className="vs-day" style={{ color: p.accent }}>{s.approved}<small> passed</small></div>
       <div className="vs-streak"><Icon name="flame" size={14} fill="var(--amber)" />{s.streak} day streak</div>
       <div className="vs-row">
         <div className="vs-mini"><div className="vs-mini-n" style={{ color: 'var(--green)' }}>{s.approved}</div><div className="vs-mini-l">Pass</div></div>
@@ -182,7 +215,7 @@ function PersonRow({ p, reqs, mine, log, onOpen, t, days, approved }) {
       <div className="tc-head">
         <span className="vs-name"><span className="vs-dot" style={{ background: p.accent }} />{p.displayName}{mine && <span className="tc-you">you</span>}</span>
         <span className="prow-nums">
-          <span className="tc-count" style={{ color: p.accent }}>{approved}<small>/{days}</small></span>
+          <span className="tc-count" style={{ color: p.accent }}>{approved}<small> passed</small></span>
           <span className="tc-count" style={{ color: done === total && total > 0 ? 'var(--green)' : 'var(--text)' }}>{done}<small>/{total} today</small></span>
         </span>
       </div>
@@ -205,34 +238,6 @@ function PersonRow({ p, reqs, mine, log, onOpen, t, days, approved }) {
         <span className="tc-tap">See proof <Icon name="chevron" size={13} /></span>
       </div>
     </button>
-  )
-}
-
-// Owner-only challenge rename. Top-anchored so the keyboard can't cover it.
-function RenameSheet({ current, onSave, onClose }) {
-  const [name, setName] = useState(current || '')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState(null)
-  const submit = () => {
-    if (!name.trim() || busy) return
-    setBusy(true); setErr(null)
-    onSave(name).catch((e) => { setErr(e.message); setBusy(false) })
-  }
-  return (
-    <Sheet onClose={onClose} position="top">
-      <div className="screen-title" style={{ fontSize: 20, marginBottom: 4 }}>Rename challenge</div>
-      <p className="muted" style={{ fontSize: 12, margin: '0 0 12px' }}>
-        Shows in the top bar and standings. Only you (the owner) can change it.
-      </p>
-      <input className="fr-input" style={{ width: '100%' }} autoFocus value={name} maxLength={60}
-        placeholder="e.g. 75 Hard" onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') submit() }} />
-      {err && <div className="login-err" style={{ textAlign: 'left' }}>{err}</div>}
-      <div className="review-actions" style={{ marginTop: 14 }}>
-        <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-        <button className="btn btn-go" disabled={busy || !name.trim()} onClick={submit}>{busy ? 'Saving…' : 'Save'}</button>
-      </div>
-    </Sheet>
   )
 }
 

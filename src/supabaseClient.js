@@ -42,6 +42,7 @@ const nReq = (r) => r && ({
   kind: r.kind, sort: r.sort,
   multi: !!r.multi, minMinutes: r.min_minutes ?? null, optional: !!r.optional,
   isPrivate: !!r.is_private, // per-item override: others see icon + caption only
+  frequency: r.frequency || 'daily', timesPerWeek: r.times_per_week ?? null, // weekly cadence
 })
 const nEntry = (r) => r && ({
   id: r.id, dayLogId: r.day_log_id, requirementId: r.requirement_id,
@@ -78,18 +79,27 @@ export async function signIn(usernameOrEmail, password) {
   return data.user.id
 }
 
-export async function signUp({ username, phone, password, email }) {
+// Availability probe for the staged signup's first step. Fails open on
+// errors — signUp's own pre-check below still guards the actual create.
+export async function usernameTaken(username) {
+  try {
+    const { data } = await supabase.rpc('email_for_username', { u: username.trim().toLowerCase() })
+    return !!data
+  } catch { return false }
+}
+
+export async function signUp({ username, password, email, phone = null }) {
   const uname = username.trim().toLowerCase()
   const { data: taken } = await supabase.rpc('email_for_username', { u: uname })
   if (taken) throw new Error('That username is taken')
   const { data, error } = await supabase.auth.signUp({ email: usernameToEmail(uname), password })
   if (error) throw error
-  if (!data.session) throw new Error('Signup needs email confirmation disabled in Supabase — ask the admin')
+  if (!data.session) throw new Error('Signup needs email confirmation disabled in Supabase. Ask the admin.')
   const display = uname.charAt(0).toUpperCase() + uname.slice(1)
   // Real email is stored on the profile (for password recovery); the auth
   // login still uses the synthetic username email. New accounts start in Coach
   // voice; strip-and-retry keeps signup working before the tone column lands.
-  const base = { id: data.user.id, username: uname, display_name: display, phone, role: 'participant', email: email?.trim().toLowerCase() || null }
+  const base = { id: data.user.id, username: uname, display_name: display, phone: phone || null, role: 'participant', email: email?.trim().toLowerCase() || null }
   let { error: pe } = await supabase.from('profiles').insert({ ...base, tone: 'coach' })
   if (pe && /tone/i.test(pe.message || '')) ({ error: pe } = await supabase.from('profiles').insert(base))
   if (pe) throw pe
@@ -236,10 +246,12 @@ export async function loadAll(userId) {
 // ─── challenge lifecycle ──────────────────────────────────────────────────
 const genCode = () => Array.from({ length: 6 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('')
 
-export async function createChallenge({ name, format, startDate, timezone, stakeText, items }, userId) {
+export async function createChallenge({ name, format, startDate, timezone, stakeText, items, dayCount }, userId) {
+  const total = dayCount ? Math.min(365, Math.max(7, Math.round(dayCount))) : null
   let challenge = null
   for (let i = 0; i < 4 && !challenge; i++) {
     const base = { name, join_code: genCode(), owner_id: userId, start_date: startDate, timezone }
+    if (total) base.total_days = total
     let { data, error } = await supabase.from('challenges').insert({ ...base, format: format || null }).select().single()
     // Strip the format column and retry if the migration hasn't landed yet.
     if (error && /format/i.test(error.message || '')) ({ data, error } = await supabase.from('challenges').insert(base).select().single())
@@ -268,10 +280,12 @@ async function insertRequirementRows(challengeId, userId, items) {
     kind: it.kind, sort: i + 1,
     multi: it.kind === 'photo' ? !!it.multi : false,
     min_minutes: it.kind === 'photo' && it.minMinutes ? Number(it.minMinutes) : null,
+    frequency: it.frequency === 'weekly' ? 'weekly' : 'daily',
+    times_per_week: it.frequency === 'weekly' ? Math.min(6, Math.max(1, Number(it.timesPerWeek) || 2)) : null,
   }))
   let { error } = await supabase.from('requirements').insert(rows)
-  if (error && /multi|min_minutes/.test(error.message || '')) {
-    const legacy = rows.map(({ multi: _m, min_minutes: _mm, ...r }) => r)
+  if (error && /multi|min_minutes|frequency|times_per_week/.test(error.message || '')) {
+    const legacy = rows.map(({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, ...r }) => r)
     ;({ error } = await supabase.from('requirements').insert(legacy))
   }
   if (error) throw error
@@ -296,6 +310,7 @@ export async function joinChallenge(code, role) {
 export async function updateMyMember(memberId, patch) {
   const db = {}
   if ('stakeText' in patch) db.stake_text = patch.stakeText
+  if ('goalLabel' in patch) db.goal_label = patch.goalLabel
   if ('launched' in patch) { db.goal_launched = patch.launched; db.goal_launched_at = patch.launchedAt ?? null }
   if ('count' in patch) db.goal_current_count = patch.count
   if ('totalDays' in patch) db.total_days = patch.totalDays // personal run extension
@@ -320,21 +335,23 @@ export async function syncMyRequirements(challengeId, userId, items) {
     icon: it.icon || (it.kind === 'photo' ? 'camera' : 'bolt'), kind: it.kind, sort: i + 1,
     multi: it.kind === 'photo' ? !!it.multi : false,
     min_minutes: it.kind === 'photo' && it.minMinutes ? Number(it.minMinutes) : null,
+    frequency: it.frequency === 'weekly' ? 'weekly' : 'daily',
+    times_per_week: it.frequency === 'weekly' ? Math.min(6, Math.max(1, Number(it.timesPerWeek) || 2)) : null,
   })
-  const strip = ({ multi: _m, min_minutes: _mm, ...r }) => r
+  const strip = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, ...r }) => r
   for (let i = 0; i < items.length; i++) {
     const it = items[i]
     const row = rowFor(it, i)
     if (it.id) {
       let { error } = await supabase.from('requirements').update(row).eq('id', it.id)
-      if (error && /multi|min_minutes/.test(error.message || '')) {
+      if (error && /multi|min_minutes|frequency|times_per_week/.test(error.message || '')) {
         ;({ error } = await supabase.from('requirements').update(strip(row)).eq('id', it.id))
       }
       if (error) throw error
     } else {
       const full = { ...row, challenge_id: challengeId, user_id: userId }
       let { error } = await supabase.from('requirements').insert(full)
-      if (error && /multi|min_minutes/.test(error.message || '')) {
+      if (error && /multi|min_minutes|frequency|times_per_week/.test(error.message || '')) {
         ;({ error } = await supabase.from('requirements').insert(strip(full)))
       }
       if (error) throw error
@@ -502,6 +519,39 @@ export async function coachChat(messages) {
   if (!res.ok) throw new Error('coach unavailable')
   return res.json() // { reply, proposal }
 }
+
+// Talk-to-build onboarding: the same short-conversation transport as coachChat,
+// but the proposal it returns is a whole challenge (name, dayCount, checklist,
+// format) the user reviews and creates.
+export async function onboardChat(messages) {
+  const { data } = await supabase.auth.getSession()
+  const token = data?.session?.access_token
+  if (!token) throw new Error('not signed in')
+  const res = await fetch(`${API_BASE}/api/onboard-coach`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ messages }),
+  })
+  if (!res.ok) throw new Error('coach unavailable')
+  return res.json() // { reply, proposal }
+}
+
+// Speech-to-text for the voice ramble: base64 audio + its mime type in, plain
+// transcript out. The caller records with MediaRecorder and edits the result
+// before sending it to the coach.
+export async function transcribeAudio(audio, mimeType) {
+  const { data } = await supabase.auth.getSession()
+  const token = data?.session?.access_token
+  if (!token) throw new Error('not signed in')
+  const res = await fetch(`${API_BASE}/api/transcribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ audio, mimeType }),
+  })
+  if (!res.ok) throw new Error('transcription failed')
+  return res.json() // { text }
+}
+
 export async function saveCaption(entryId, caption) {
   // Clear the stale macro estimate as we save the new caption, so the tile
   // reads "estimating…" until the caller re-scores it (see estimateMeal).

@@ -1,41 +1,65 @@
 // ─────────────────────────────────────────────────────────────────────────
-// theme.js — the colorway system.
-// Five themes: Midnight (default, the original), Espresso, Navy, Sand, and
-// Blush (the SGS-inspired look pack: pastels + serif, all theme-scoped).
-// CSS variables live in App.jsx's THEME string (`:root` = Midnight plus
-// `:root[data-theme=...]` override blocks); this module owns the metadata,
-// the member-accent remaps, and applying/persisting the choice.
-// NOTE: index.html has a tiny pre-paint copy of THEME_BG — keep in sync.
+// theme.js — the two-experience system.
+// Two modes users pick from: Linen (soft — cream/sage/clay, serif, its own
+// layout on key screens) and Navy (dark, the competitive look). Midnight is
+// a hidden legacy theme kept for the original accounts; retired colorways
+// (espresso/sand/blush) remap on read. CSS variables live in App.jsx's THEME
+// string (`:root` = Midnight plus `:root[data-theme=...]` blocks); this
+// module owns the metadata, the member-accent remaps, mode derivation, and
+// applying/persisting the choice.
+// NOTE: index.html has a tiny pre-paint copy of THEME_REMAP + THEME_BG —
+// keep in sync.
 // ─────────────────────────────────────────────────────────────────────────
 
 export const THEMES = [
-  { key: 'midnight', label: 'Midnight', swatch: { bg: '#08080b', a: '#FF3B30', b: '#30D158' } },
-  { key: 'espresso', label: 'Espresso', swatch: { bg: '#120D0A', a: '#FF8A5C', b: '#3FD8C2' } },
-  { key: 'navy', label: 'Navy', swatch: { bg: '#070D17', a: '#FF6B8A', b: '#3BD5F5' } },
-  { key: 'sand', label: 'Sand', swatch: { bg: '#EAE0CE', a: '#8E3B54', b: '#206B62' } },
-  { key: 'blush', label: 'Blush', swatch: { bg: '#F8F1EA', a: '#A34A60', b: '#3E6BB4' } },
+  { key: 'linen', label: 'Paper', mode: 'soft',
+    blurb: 'Cream, near-black ink, and one terracotta spot. Editorial and warm.',
+    swatch: { bg: '#F2ECDF', a: '#C15A34', b: '#8A7360', text: '#1E1810' } },
+  { key: 'navy', label: 'Noir', mode: 'dark',
+    blurb: 'Black, paper white, and the same terracotta. Sharp and focused.',
+    swatch: { bg: '#14110D', a: '#D2794A', b: '#8FB073', text: '#EFE7D8' } },
+  { key: 'midnight', label: 'Midnight', mode: 'dark', legacy: true,
+    blurb: 'The original. Yours stays as is.',
+    swatch: { bg: '#08080b', a: '#FF3B30', b: '#30D158', text: '#f5f5f7' } },
 ]
 
-export const THEME_BG = { midnight: '#08080b', espresso: '#120D0A', navy: '#070D17', sand: '#EAE0CE', blush: '#F8F1EA' }
+// Retired colorways land on the nearest surviving experience.
+export const THEME_REMAP = { espresso: 'navy', sand: 'linen', blush: 'linen' }
 
-// Member accents stay canonical in the DB (MEMBER_COLORS); the three new
-// themes remap them at render time to psychology-safe hues (no pure
-// success-green / fail-red identities). Midnight is identity — untouched.
+export const THEME_BG = { midnight: '#08080b', navy: '#14110D', linen: '#F2ECDF' }
+
+// Member accents stay canonical in the DB (MEMBER_COLORS) and remap at render
+// time. Midnight is identity — untouched. Paper/Ink pull them into one warm
+// earth family (terracotta, olive, ochre, clay) so nothing screams off-palette.
 export const ACCENT_MAPS = {
   midnight: {},
-  espresso: { '#FF3B30': '#FF8A5C', '#34C759': '#3FD8C2', '#0A84FF': '#7FA8FF', '#FF9F0A': '#F2789F', '#FFD60A': '#FFCE54' },
-  navy: { '#FF3B30': '#FF6B8A', '#34C759': '#3BD5F5', '#0A84FF': '#9D8CFF', '#FF9F0A': '#FFA35C', '#FFD60A': '#FFD34D' },
-  sand: { '#FF3B30': '#8E3B54', '#34C759': '#206B62', '#0A84FF': '#3B5B8C', '#FF9F0A': '#74468C', '#FFD60A': '#7A5E0C' },
-  blush: { '#FF3B30': '#A34A60', '#34C759': '#2F6E57', '#0A84FF': '#3E6BB4', '#FF9F0A': '#B4622D', '#FFD60A': '#96700F' },
+  navy: { '#FF3B30': '#D2794A', '#34C759': '#8FB073', '#0A84FF': '#C9A24A', '#FF9F0A': '#D98A4A', '#FFD60A': '#E0C060' },
+  linen: { '#FF3B30': '#C15A34', '#34C759': '#5E7449', '#0A84FF': '#A5772E', '#FF9F0A': '#B06A3E', '#FFD60A': '#9A7A28' },
 }
 
 export const mapAccent = (theme, hex) =>
   (hex && ACCENT_MAPS[theme]?.[String(hex).toUpperCase()]) || hex
 
-export const normalizeTheme = (k) => (THEMES.some((t) => t.key === k) ? k : 'midnight')
+export const normalizeTheme = (k) => {
+  k = THEME_REMAP[k] || k
+  return THEMES.some((t) => t.key === k) ? k : 'linen'
+}
+
+export const themeMode = (k) => THEMES.find((t) => t.key === normalizeTheme(k))?.mode || 'dark'
+
+// What the pickers offer: the two modes, plus Midnight only for accounts
+// already on it (legacy — never offered to new users).
+export const pickableThemes = (current) => THEMES.filter((t) => !t.legacy || t.key === current)
 
 export function getStoredTheme() {
-  try { return normalizeTheme(localStorage.getItem('75hard-theme')) } catch { return 'midnight' }
+  try { return normalizeTheme(localStorage.getItem('75hard-theme')) } catch { return 'linen' }
+}
+
+// Pin the status-bar color + html canvas for logged-out/first-run surfaces
+// (no data-theme dependence; applyTheme owns chrome once signed in).
+export function pinChrome(bg) {
+  document.documentElement.style.background = bg
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg)
 }
 
 export function applyTheme(key) {

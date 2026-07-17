@@ -1,15 +1,14 @@
 {
   "name": "You Mode",
   "short_name": "You Mode",
-  "description": "Build your own challenge — daily proof, real stakes, your crew keeping score.",
+  "description": "Turn your goal into a daily challenge. Photo proof or simple checkmarks, solo or with friends.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#130C08",
-  "theme_color": "#130C08",
+  "background_color": "#F4EFE6",
+  "theme_color": "#F4EFE6",
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
     { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
   ]

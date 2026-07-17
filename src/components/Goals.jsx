@@ -74,8 +74,11 @@ function Milestone({ n, title, right }) {
 function GoalCard({ p }) {
   const { cfg, me, actions } = useApp()
   const g = goalStatus(p, cfg)
-  if (!g) return null
   const mine = p.userId === me.id
+  const [editingName, setEditingName] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  if (!g) return null
 
   async function setLaunched(v) {
     if (!mine) return
@@ -87,11 +90,39 @@ function GoalCard({ p }) {
     await actions.updateMyMember(p.id, { count: Math.max(0, (g.count || 0) + delta) })
     await actions.refresh()
   }
+  async function saveName() {
+    const label = draft.trim()
+    if (!label || label === g.label) { setEditingName(false); return }
+    setSavingName(true)
+    try {
+      await actions.updateMyMember(p.id, { goalLabel: label })
+      await actions.refresh()
+      setEditingName(false)
+    } finally {
+      setSavingName(false)
+    }
+  }
 
   return (
     <div className="goal-card" style={wash(p.accent)}>
       <CardHead accent={p.accent} title={p.displayName} mine={mine} />
-      <div className="muted" style={{ fontSize: 14 }}>{g.label}</div>
+      {editingName ? (
+        <div className="goal-name-edit">
+          <input autoFocus value={draft} maxLength={80} placeholder="Goal name"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false) }} />
+          <button className="btn btn-sm btn-go" disabled={savingName} onClick={saveName}>{savingName ? '…' : 'Save'}</button>
+          <button className="btn btn-sm btn-ghost" disabled={savingName} onClick={() => setEditingName(false)}>Cancel</button>
+        </div>
+      ) : (
+        <div className="goal-label-row">
+          <span className="muted" style={{ fontSize: 14 }}>{g.label}</span>
+          {mine && (
+            <button className="goal-edit-btn" aria-label="Rename goal"
+              onClick={() => { setDraft(g.label); setEditingName(true) }}><Icon name="edit" size={13} /></button>
+          )}
+        </div>
+      )}
 
       <div className="goal-milestone">
         <Milestone n="1" title="Launch" right={

@@ -70,13 +70,14 @@ async function handle(req) {
       headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
+        max_tokens: 700,
         system:
           'You estimate nutrition from a meal photo and the eater\'s one-line description. ' +
-          'The description is AUTHORITATIVE for what the meal is and the quantities — if it says "6 eggs", estimate 6 eggs even if the photo makes portions hard to judge. ' +
-          'Use the photo only to fill in items the description omits and to catch wild mismatches (description says steak, photo shows salad — then estimate the photo). ' +
-          'Use standard nutrition values (e.g. 1 large egg ≈ 6g protein / 75 cal). ' +
-          'Respond with ONLY strict JSON: {"protein_g": <int>, "calories": <int>}',
+          'The description is AUTHORITATIVE for what the meal is and the quantities. If it says "6 eggs", estimate 6 eggs even if the photo makes portions hard to judge. ' +
+          'Use the photo only to fill in items the description omits and to catch wild mismatches (description says steak, photo shows salad, then estimate the photo). ' +
+          'Work it out step by step before answering. List every distinct food and ingredient on its own line with its own calories and protein, using realistic standard nutrition values (a large egg is about 75 cal and 6g protein; 1 tbsp oil or butter about 120 cal; 1 tbsp maple syrup about 50 cal; dry rolled oats about 150 cal per half cup). ' +
+          'Include the easy-to-miss items so you do not undercount: cooking oil or butter, sauces, dressings, syrups, and nut butters. But keep every line realistic and do not inflate. Add every line up. ' +
+          'After the itemized list, output the totals as strict JSON on the final line, with nothing after it: {"protein_g": <int>, "calories": <int>}',
         messages: [{
           role: 'user',
           content: [
@@ -89,8 +90,11 @@ async function handle(req) {
     if (!aRes.ok) return Response.json({ skipped: 'ai unavailable' }, { status: 200 })
     const ai = await aRes.json()
     const text = ai?.content?.find((b) => b.type === 'text')?.text || ''
+    // The model itemizes each food first, then emits the totals as the final
+    // JSON object. Grab the LAST flat {...} so the reasoning can't fool the parse.
+    const objs = text.match(/\{[^{}]*\}/g) || []
     let est = {}
-    try { est = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}') } catch { /* skip */ }
+    try { est = JSON.parse(objs[objs.length - 1] || '{}') } catch { /* skip */ }
     const protein = Number.isFinite(est.protein_g) ? Math.max(0, Math.min(300, Math.round(est.protein_g))) : null
     const calories = Number.isFinite(est.calories) ? Math.max(0, Math.min(4000, Math.round(est.calories))) : null
     if (protein == null && calories == null) return Response.json({ skipped: 'unparseable estimate' }, { status: 200 })

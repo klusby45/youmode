@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import * as api from '../data.js'
 import { CLASSIC_TEMPLATE, detectTimezone, slugify } from '../config.js'
-import { THEMES } from '../theme.js'
-import { VOICES } from '../copy.js'
+import { pinChrome } from '../theme.js'
 import { todayInTz } from '../lib/challenge.js'
 import Icon from './Icons.jsx'
+import { ColorwayVoiceStep, ShareCodeStep } from './PostCreateSteps.jsx'
 
-const FORMATS = [
+export const FORMATS = [
   { key: 'solo', label: 'Solo', icon: 'target', blurb: 'Just you and the calendar.' },
   { key: 'versus', label: 'Versus', icon: 'versus', blurb: 'Head to head with a friend, scored side by side.' },
   { key: 'accountability', label: 'Partners', icon: 'check', blurb: 'Different goals, same commitment. You keep each other honest.' },
@@ -17,10 +17,12 @@ const FORMATS = [
 // their voice at the "yours" step; copyFor kicks in post-pick, in-app).
 const STEPS = ['format', 'basics', 'checklist', 'stakes', 'yours', 'code']
 
-export default function Onboard({ profile, onDone, signOut, theme, tone, pickTheme, pickTone }) {
+export default function Onboard({ profile, onDone, signOut, onUseGuide, theme, tone, pickTheme, pickTone }) {
   const [step, setStep] = useState('welcome')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
+
+  useEffect(() => { pinChrome('#F2ECDF') }, []) // cream first-run chrome
 
   // create state
   const tz = detectTimezone()
@@ -72,9 +74,11 @@ export default function Onboard({ profile, onDone, signOut, theme, tone, pickThe
       const final = finalizeItems()
       if (!final.length) throw new Error('Add at least one daily item')
       const ch = await api.createChallenge(
-        { name: name.trim() || 'My Challenge', format, startDate, timezone: tz, stakeText: stake.trim() || null, items: final },
+        { name: name.trim() || 'My Challenge', format, startDate, timezone: tz, stakeText: format !== 'solo' && stake.trim() ? stake.trim() : null, items: final },
         profile.id,
       )
+      // Solo has no one to invite, so skip the invite step and start Day 1.
+      if (format === 'solo') { await onDone(); return }
       setCreatedCode(ch.joinCode)
       setStep('code')
     } catch (e) {
@@ -106,13 +110,15 @@ export default function Onboard({ profile, onDone, signOut, theme, tone, pickThe
   const next = (to) => () => { setErr(null); setStep(to) }
 
   return (
-    <div className="sun-scope">
-      <div className="sun-bg" />
+    <div className="lin">
+      <div className="lin-bg" />
       <div className="onb-wrap">
-        <div className="login-brand" style={{ marginBottom: 14 }}>
-          <div className="lb-mark" style={{ fontSize: 42 }}>YOU</div>
-          <div className="lb-word" style={{ fontSize: 17 }}>MODE</div>
-        </div>
+        <header className="au-top">
+          <span className="au-brand">
+            <img className="au-logo" src="/logo-96.png" alt="" />
+            <span className="au-word">You Mode</span>
+          </span>
+        </header>
 
         {stepIdx >= 0 && (
           <div className="onb-dots" aria-hidden="true">
@@ -127,6 +133,7 @@ export default function Onboard({ profile, onDone, signOut, theme, tone, pickThe
             <button className="btn btn-accent btn-block" style={{ marginTop: 18 }} onClick={next('format')}>
               Let's build it →
             </button>
+            {onUseGuide && <button className="auth-flip" onClick={onUseGuide}>← Back to the guided setup</button>}
             <button className="auth-flip" onClick={next('join')}>Have an invite code? Join instead</button>
             <button className="auth-flip" onClick={signOut}>Sign out</button>
           </>
@@ -211,48 +218,13 @@ export default function Onboard({ profile, onDone, signOut, theme, tone, pickThe
         )}
 
         {step === 'yours' && (
-          <>
-            <div className="screen-title">Make it yours.</div>
-            <p className="muted onb-sub-lg">How it looks, how it talks to you. Change anytime from your avatar.</p>
-            <div className="section-label" style={{ marginTop: 16 }}>Colorway</div>
-            {THEMES.map((t) => (
-              <button key={t.key} className={'theme-opt' + (t.key === theme ? ' active' : '')} onClick={() => pickTheme(t.key)}>
-                <span className="theme-swatch" style={{ background: t.swatch.bg }}>
-                  <i style={{ background: t.swatch.a }} />
-                  <i style={{ background: t.swatch.b }} />
-                </span>
-                <span className="to-label">{t.label}</span>
-                {t.key === theme && <span className="to-check"><Icon name="check" size={18} /></span>}
-              </button>
-            ))}
-            <div className="section-label">Voice</div>
-            {VOICES.map((v) => (
-              <button key={v.key} className={'theme-opt voice-opt' + (v.key === tone ? ' active' : '')} onClick={() => pickTone(v.key)}>
-                <span className="to-label">
-                  {v.label}
-                  <small>{v.preview}</small>
-                </span>
-                {v.key === tone && <span className="to-check"><Icon name="check" size={18} /></span>}
-              </button>
-            ))}
-            {err && <div className="login-err">{err}</div>}
-            <button className="btn btn-accent btn-block" style={{ marginTop: 14 }} disabled={busy} onClick={doCreate}>
-              {busy ? 'Creating…' : 'Create my challenge'}
-            </button>
-            <button className="auth-flip" onClick={back('stakes')}>Back</button>
-          </>
+          <ColorwayVoiceStep
+            theme={theme} tone={tone} pickTheme={pickTheme} pickTone={pickTone}
+            primaryLabel="Create my challenge" busyLabel="Creating…" busy={busy} err={err}
+            onPrimary={doCreate} onBack={back('stakes')} />
         )}
 
-        {step === 'code' && (
-          <>
-            <div className="screen-title center">You're in. Share your code.</div>
-            <p className="center muted onb-sub-lg">Anyone with this code can join you. Send it to your people.</p>
-            <div className="code-big">{createdCode}</div>
-            <button className="btn btn-block" onClick={() => navigator.clipboard?.writeText(createdCode).catch(() => {})}>Copy code</button>
-            <button className="btn btn-go btn-block" style={{ marginTop: 10 }} onClick={onDone}>Start Day 1 →</button>
-            <p className="center muted" style={{ fontSize: 12, marginTop: 14 }}>No referee? No problem. Finished days count automatically, with AI spot checks keeping photos honest.</p>
-          </>
-        )}
+        {step === 'code' && <ShareCodeStep code={createdCode} format={format} onDone={onDone} />}
 
         {step === 'join' && (
           <>

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import * as api from '../data.js'
+import { pinChrome } from '../theme.js'
 
 // Landing target for the emailed reset link (youmode.app/reset?token=...).
-// Standalone + sunrise-styled; shown regardless of auth state.
+// Standalone, cream first-run styling; shown regardless of auth state.
 export default function ResetPassword({ token, onDone }) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -10,11 +11,13 @@ export default function ResetPassword({ token, onDone }) {
   const [err, setErr] = useState(null)
   const [done, setDone] = useState(false)
 
+  useEffect(() => { pinChrome('#F2ECDF') }, [])
+
   async function submit(e) {
     e.preventDefault()
     setErr(null)
-    if (password.length < 6) return setErr('Password: at least 6 characters')
-    if (password !== confirm) return setErr('Those passwords don’t match')
+    if (password.length < 6) return setErr('Passwords need at least 6 characters')
+    if (password !== confirm) return setErr("Those passwords don't match")
     setBusy(true)
     try {
       await api.resetPassword(token, password)
@@ -26,27 +29,29 @@ export default function ResetPassword({ token, onDone }) {
   }
 
   return (
-    <div className="sun-scope">
-      <div className="sun-bg" />
-      <div className="login-wrap">
-        <div className="login-card">
-          <div className="login-brand">
-            <div className="lb-mark">YOU</div>
-            <div className="lb-word">MODE</div>
-            <div className="lb-sub">{done ? 'Password updated' : 'Set a new password'}</div>
-          </div>
+    <div className="lin">
+      <div className="lin-bg" />
+      <div className="au-wrap">
+        <header className="au-top">
+          <span className="au-brand">
+            <img className="au-logo" src="/logo-96.png" alt="" />
+            <span className="au-word">You Mode</span>
+          </span>
+        </header>
+        <div className="au-step">
           {done ? (
             <>
-              <p className="center muted" style={{ fontSize: 14, lineHeight: 1.6 }}>
-                You're all set. Sign in with your new password.
-              </p>
-              <button className="btn btn-accent btn-block" style={{ marginTop: 14 }} onClick={onDone}>Sign in</button>
+              <h2 className="au-q">Password updated.</h2>
+              <p className="au-sub">You're all set. Sign in with your new password.</p>
+              <button className="btn btn-accent btn-block" onClick={onDone}>Sign in</button>
             </>
           ) : (
             <form onSubmit={submit}>
+              <h2 className="au-q">Set a new password.</h2>
+              <p className="au-sub">At least 6 characters. You'll use it from now on.</p>
               <div className="field">
                 <label>New password</label>
-                <input type="password" autoComplete="new-password" value={password}
+                <input type="password" autoComplete="new-password" autoFocus value={password}
                   onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
               </div>
               <div className="field">

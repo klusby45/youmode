@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { THEMES } from '../theme.js'
 import { VOICES } from '../copy.js'
 import Icon from './Icons.jsx'
 import Sheet from './Sheet.jsx'
+import { ModeCards } from './PostCreateSteps.jsx'
 
 // Personal settings sheet (avatar tap): colorway, voice, and photo privacy.
 // Every pick applies live and only affects your own account. Sheet stays open
@@ -19,17 +19,11 @@ export default function YouSheet({
         Your picks, your eyes only — everyone chooses their own.
       </p>
 
-      <div className="section-label" style={{ marginTop: 0 }}>Colorway</div>
-      {THEMES.map((t) => (
-        <button key={t.key} className={'theme-opt' + (t.key === theme ? ' active' : '')} onClick={() => onPickTheme(t.key)}>
-          <span className="theme-swatch" style={{ background: t.swatch.bg }}>
-            <i style={{ background: t.swatch.a }} />
-            <i style={{ background: t.swatch.b }} />
-          </span>
-          <span className="to-label">{t.label}</span>
-          {t.key === theme && <span className="to-check"><Icon name="check" size={18} /></span>}
-        </button>
-      ))}
+      <div className="section-label" style={{ marginTop: 0 }}>Mode</div>
+      <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
+        Two looks, one challenge. Change anytime.
+      </p>
+      <ModeCards theme={theme} pickTheme={onPickTheme} />
 
       <div className="section-label">Voice</div>
       <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>

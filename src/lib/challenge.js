@@ -47,9 +47,12 @@ export function entrySatisfies(req, entry) {
   return req.kind === 'photo' ? !!(entry.photoPaths?.length || entry.photoPath) : !!entry.checked
 }
 
-// Optional items (e.g. a bonus protein-shake slot) never gate completeness —
-// they render as tiles but don't count toward the daily X/N.
-const required = (reqs) => reqs.filter((r) => !r.optional)
+// The daily-mandatory set. Two kinds of items never gate a day's X/N:
+//   • optional items (e.g. a bonus protein-shake slot), and
+//   • weekly-cadence items (e.g. "soccer 2x/week") — you can't do them every
+//     day, so they'd wrongly fail most days. Weekly items get their own
+//     display-only progress via weeklyProgress(); they never touch dayState.
+const required = (reqs) => reqs.filter((r) => !r.optional && r.frequency !== 'weekly')
 
 export function isLogComplete(reqs, log) {
   const must = required(reqs)
@@ -63,6 +66,33 @@ export function logDone(reqs, log) {
 
 export function logTotal(reqs) {
   return required(reqs).length
+}
+
+// Display-only weekly-cadence progress. Challenge-relative weeks: weekIndex =
+// ceil(dayNumber/7), so "this week" = days (w-1)*7+1 .. w*7. For each weekly
+// requirement, counts how many days in the current week already have a
+// satisfying entry. Never feeds dayState/streak/standings — purely for the
+// Today "This week" section.
+export function weeklyProgress(reqs, logs, { startStr, dayNumber, totalDays }) {
+  const weekly = reqs.filter((r) => r.frequency === 'weekly')
+  if (!weekly.length || dayNumber < 1) return {}
+  const logsByDate = {}
+  for (const l of logs) logsByDate[l.logDate] = l
+  const w = Math.ceil(dayNumber / 7)
+  const first = (w - 1) * 7 + 1
+  const last = totalDays ? Math.min(w * 7, totalDays) : w * 7
+  const daysInWeek = Math.max(1, last - first + 1) // a final partial week can be < 7
+  const out = {}
+  for (const r of weekly) {
+    let done = 0
+    for (let n = first; n <= last; n++) {
+      if (entrySatisfies(r, logsByDate[dayDate(startStr, n)]?.entriesByReq?.[r.id])) done++
+    }
+    // Clamp the target so a short final week can't show an unreachable goal.
+    const target = Math.max(1, Math.min(r.timesPerWeek || 1, daysInWeek))
+    out[r.id] = { done, target, met: done >= target }
+  }
+  return out
 }
 
 // ── day state ─────────────────────────────────────────────────────────────

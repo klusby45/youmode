@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .netlify/
+.env
+.env.local
+.env.*.local
 ios/App/Pods/
 ios/App/App/public/
 *.log
