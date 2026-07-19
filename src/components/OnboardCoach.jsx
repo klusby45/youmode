@@ -5,6 +5,7 @@ import { pinChrome, applyTheme, getStoredTheme } from '../theme.js'
 import { todayInTz } from '../lib/challenge.js'
 import Icon from './Icons.jsx'
 import Onboard, { FORMATS } from './Onboard.jsx'
+import ItemRowEditor from './ItemRowEditor.jsx'
 import { ColorwayVoiceStep, ShareCodeStep } from './PostCreateSteps.jsx'
 
 // Talk-to-build onboarding. A brand-new member says (or types) what they want
@@ -42,28 +43,27 @@ function blobToBase64(blob) {
   })
 }
 
-// A one-line textarea that grows to fit its text instead of clipping it, so
-// long checklist titles wrap and stay readable while still being editable.
-function GrowText({ className, value, placeholder, onChange, ariaLabel }) {
-  const ref = useRef(null)
-  useEffect(() => {
-    const el = ref.current
-    if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' }
-  }, [value])
-  return (
-    <textarea ref={ref} rows={1} className={className} value={value} placeholder={placeholder}
-      aria-label={ariaLabel} onChange={onChange} />
-  )
-}
+// (Item rows now come from the shared ItemRowEditor, which owns GrowText.)
 
-export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pickTheme, pickTone }) {
+export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme, tone, pickTheme, pickTone }) {
   const tz = detectTimezone()
   const [manual, setManual] = useState(false)
-  const [step, setStep] = useState('ramble') // ramble | interview | review | yours | code
-  const [msgs, setMsgs] = useState([])
-  const [input, setInput] = useState('')
+  // A 10-minute ramble is too precious to live only in React state (Mayssa
+  // lost hers to a stuck chat, 2026-07-17): the conversation + draft persist
+  // to localStorage per user, and a reload drops you right back in.
+  const persistKey = `ym-onb-${profile.id}`
+  const savedRef = useRef(null)
+  if (savedRef.current === null) {
+    try { savedRef.current = JSON.parse(localStorage.getItem(persistKey) || 'null') || false }
+    catch { savedRef.current = false }
+  }
+  const saved = savedRef.current
+  const [step, setStep] = useState(saved?.msgs?.length ? 'interview' : 'ramble') // ramble | interview | review | yours | code
+  const [msgs, setMsgs] = useState(saved?.msgs || [])
+  const [input, setInput] = useState(saved?.input || '')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
+  const autoRef = useRef(0) // auto-trigger attempts for the current user turn
 
   // proposal → editable review state
   const [name, setName] = useState('')
@@ -83,8 +83,9 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
   const recRef = useRef(null)
   const streamRef = useRef(null)
   const timerRef = useRef(null)
-  const cancelledRef = useRef(false)
+  const discardRef = useRef(false) // Discard tapped: drop the whole take
   const liveRef = useRef(false) // true while the mic session is running
+  const bufRef = useRef('') // transcript accumulates here; flushes to the box only on stop
   const secsRef = useRef(0) // interval-owned elapsed counter
   const pendingRef = useRef(0) // segments awaiting transcription
   const queueRef = useRef(Promise.resolve()) // serializes appends in speech order
@@ -101,6 +102,27 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [msgs, busy])
+
+  // Keep the in-progress session on disk (cleared when the challenge is created).
+  useEffect(() => {
+    try {
+      if (msgs.length || input.trim()) localStorage.setItem(persistKey, JSON.stringify({ msgs, input }))
+      else localStorage.removeItem(persistKey)
+    } catch { /* private mode */ }
+  }, [msgs, input, persistKey])
+
+  // Self-healing chat: if the conversation is sitting on an unanswered user
+  // message (a restored session, or a turn that failed), trigger the coach
+  // ourselves — the user should never have to nudge it. Two auto-attempts per
+  // turn, then the error + manual retry stand.
+  useEffect(() => {
+    if (step !== 'interview' || busy) return
+    const last = msgs[msgs.length - 1]
+    if (!last || last.role !== 'user' || autoRef.current >= 2) return
+    const attempt = autoRef.current += 1
+    const t = setTimeout(() => runCoach(msgs), attempt === 1 ? 400 : 2500)
+    return () => clearTimeout(t)
+  }, [step, busy, msgs]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Grow the ramble box with the transcript so a long ramble stays visible
   // instead of hiding above the fold of a 3-row textarea.
@@ -122,7 +144,7 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
   useEffect(() => () => { applyTheme(getStoredTheme()) }, [])
 
   if (manual) {
-    return <Onboard profile={profile} onDone={onDone} signOut={signOut} onUseGuide={() => setManual(false)}
+    return <Onboard profile={profile} onDone={onDone} signOut={signOut} onCancel={onCancel} onUseGuide={() => setManual(false)}
       theme={theme} tone={tone} pickTheme={pickTheme} pickTone={pickTone} />
   }
 
@@ -137,8 +159,10 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
       key: '', label: it.label || '', hint: it.hint || '', group: it.group || 'Custom',
       icon: it.icon || (it.kind === 'photo' ? 'camera' : 'bolt'),
       kind: it.kind === 'check' ? 'check' : 'photo', minMinutes: it.minMinutes,
-      frequency: it.frequency === 'weekly' ? 'weekly' : 'daily',
+      frequency: it.frequency === 'weekly' || it.frequency === 'monthly' ? it.frequency : 'daily',
       timesPerWeek: it.frequency === 'weekly' ? Math.min(6, Math.max(1, Number(it.timesPerWeek) || 2)) : null,
+      timesPerMonth: it.frequency === 'monthly' ? Math.min(10, Math.max(1, Number(it.timesPerMonth) || 1)) : null,
+      timesPerDay: it.kind === 'check' && Number(it.timesPerDay) > 1 ? Math.min(6, Math.round(Number(it.timesPerDay))) : null,
     })))
   }
 
@@ -146,8 +170,14 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
     setBusy(true); setErr(null)
     try {
       const { reply, proposal } = await api.onboardChat(next)
-      if (reply) setMsgs((xs) => [...xs, { role: 'assistant', content: reply }])
-      if (proposal && proposal.items?.length) { seedFromProposal(proposal); setStep('review') }
+      // Show something no matter what — a silent turn strands the user in a
+      // dead chat (Mayssa, 2026-07-17: model spent its whole budget reasoning,
+      // returned nothing, and the UI just sat there).
+      const text = (reply || '').trim()
+      const usable = proposal && proposal.items?.length
+      if (text && text !== '…') setMsgs((xs) => [...xs, { role: 'assistant', content: text }])
+      else if (!usable) setMsgs((xs) => [...xs, { role: 'assistant', content: "I've got all of that. Say \"build it\" and I'll turn it into your challenge." }])
+      if (usable) { seedFromProposal(proposal); setStep('review') }
     } catch {
       setErr("Couldn't reach the setup guide. Check your connection and try again.")
     } finally {
@@ -159,6 +189,7 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
   function startInterview() {
     const text = input.trim()
     if (!text || busy) return
+    autoRef.current = 0 // fresh turn, fresh auto-retry budget
     const next = [{ role: 'user', content: text }]
     setMsgs(next); setInput(''); setStep('interview')
     runCoach(next)
@@ -168,6 +199,7 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
   function send() {
     const text = input.trim()
     if (!text || busy) return
+    autoRef.current = 0
     const next = [...msgs, { role: 'user', content: text }]
     setMsgs(next); setInput('')
     runCoach(next)
@@ -196,16 +228,19 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
     catch { return (await api.transcribeAudio(b64, blob.type)).text } // one retry
   }
 
-  // Transcriptions run through a promise chain so text always appends in the
-  // order it was spoken, even if a later segment transcribes faster.
+  // Transcriptions run through a promise chain so text always lands in the
+  // order it was spoken, even if a later segment transcribes faster. Segments
+  // transcribe in the background WHILE recording (keeps the final wait short),
+  // but the text stays in bufRef — the box only fills once, on stop. Filling
+  // it mid-recording read as "it stopped listening" (Tom test, 2026-07-17).
   function handleSegment(blob) {
-    if (cancelledRef.current) { cancelledRef.current = false; settleIfDone(); return }
+    if (discardRef.current) { settleIfDone(); return }
     if (!blob.size || blob.size < 2000) { settleIfDone(); return } // sub-second blip, no speech
     pendingRef.current += 1
     queueRef.current = queueRef.current.then(async () => {
       try {
         const text = await transcribeSeg(blob)
-        if (text) setInput((cur) => (cur ? cur.trim() + ' ' : '') + text)
+        if (text) bufRef.current = (bufRef.current ? bufRef.current.trim() + ' ' : '') + text
       } catch {
         setErr("Part of that didn't come through. Keep talking or type the missing part.")
       } finally {
@@ -216,7 +251,15 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
   }
 
   function settleIfDone() {
-    if (!liveRef.current && pendingRef.current === 0) setRecState('idle')
+    if (liveRef.current || pendingRef.current !== 0) return
+    // Everything's transcribed: flush the whole take at once (unless discarded).
+    if (!discardRef.current && bufRef.current) {
+      const take = bufRef.current
+      setInput((cur) => (cur ? cur.trim() + ' ' : '') + take)
+    }
+    bufRef.current = ''
+    discardRef.current = false
+    setRecState('idle')
   }
 
   async function startRec() {
@@ -224,7 +267,8 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
-      cancelledRef.current = false
+      discardRef.current = false
+      bufRef.current = ''
       liveRef.current = true
       recRef.current = makeRecorder(stream)
       recRef.current.start()
@@ -266,14 +310,14 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
   }
 
   function cancelRec() {
-    cancelledRef.current = true // drops only the current (untranscribed) segment
+    discardRef.current = true // Discard = throw away the whole take (typed text stays)
     stopRec()
   }
 
   // ── review item editing (mirrors Onboard's builder) ────────────────────
   const updateItem = (i, patch) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, ...patch } : x)))
   const removeItem = (i) => setItems((xs) => xs.filter((_, j) => j !== i))
-  const addItem = (kind) => setItems((xs) => [...xs, { key: '', label: '', hint: '', group: 'Custom', icon: kind === 'photo' ? 'camera' : 'bolt', kind }])
+  const addItem = (kind) => setItems((xs) => [...xs, { key: '', label: '', hint: '', group: 'Custom', icon: kind === 'photo' ? 'camera' : kind === 'timer' ? 'clock' : 'bolt', kind, ...(kind === 'timer' ? { minMinutes: 10 } : {}) }])
 
   function finalizeItems() {
     const seen = new Set(); const out = []
@@ -307,6 +351,7 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
           if (plan.startWeight) await api.addWeighIn(profile.id, startDate, plan.startWeight).catch(() => {})
         } catch { /* keep the challenge; the plan can be added later from Goals */ }
       }
+      try { localStorage.removeItem(persistKey) } catch { /* private mode */ } // session complete
       setCreatedCode(ch.joinCode)
       setStep('yours')
     } catch (e) {
@@ -376,7 +421,8 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
 
             <button className="btn btn-accent btn-block" style={{ marginTop: 14 }} disabled={!input.trim() || recState !== 'idle' || busy} onClick={startInterview}>Set it up →</button>
             <button className="auth-flip" onClick={() => setManual(true)}>Prefer to set it up yourself?</button>
-            <button className="auth-flip" onClick={signOut}>Sign out</button>
+            {onCancel && <button className="auth-flip" onClick={onCancel}>← Back to my challenge</button>}
+            {!onCancel && <button className="auth-flip" onClick={signOut}>Sign out</button>}
           </>
         )}
 
@@ -412,7 +458,14 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
                 <div className="oc-stepper">
                   <button type="button" aria-label="Fewer days"
                     onClick={() => setDayCount((d) => Math.max(7, (Number(d) || 75) - 1))}><Icon name="minus" size={16} /></button>
-                  <span className="oc-step-n">{Number(dayCount) || 75} days</span>
+                  {/* Tap the number and type it — ± for nudges (Mayssa) */}
+                  <span className="oc-step-n">
+                    <input className="oc-step-in" type="number" inputMode="numeric" min={7} max={365}
+                      value={dayCount} aria-label="Number of days"
+                      onChange={(e) => setDayCount(e.target.value)}
+                      onBlur={() => setDayCount((d) => Math.min(365, Math.max(7, Math.round(Number(d)) || 75)))} />
+                    days
+                  </span>
                   <button type="button" aria-label="More days"
                     onClick={() => setDayCount((d) => Math.min(365, (Number(d) || 75) + 1))}><Icon name="plus" size={16} /></button>
                 </div>
@@ -433,38 +486,15 @@ export default function OnboardCoach({ profile, onDone, signOut, theme, tone, pi
             </div>
 
             <div className="section-label">Your checklist</div>
-            {items.map((it, i) => {
-              const wk = it.frequency === 'weekly'
-              return (
-              <div className="builder-row br-multi" key={i}>
-                <div className="br-main">
-                  <button className={'kind-toggle ' + it.kind} onClick={() => updateItem(i, { kind: it.kind === 'photo' ? 'check' : 'photo', icon: it.kind === 'photo' ? 'bolt' : 'camera' })}>
-                    {it.kind === 'photo' ? '📷 Photo' : '✓ Check'}
-                  </button>
-                  <div className="br-fields">
-                    <GrowText className="br-label" value={it.label} placeholder="e.g. 45-min workout" ariaLabel="Item name" onChange={(e) => updateItem(i, { label: e.target.value })} />
-                    <GrowText className="br-hint" value={it.hint || ''} placeholder="detail (optional)" ariaLabel="Detail" onChange={(e) => updateItem(i, { hint: e.target.value })} />
-                  </div>
-                  <button className="br-del" onClick={() => removeItem(i)} title="Remove"><Icon name="x" size={15} /></button>
-                </div>
-                <div className="br-cadence">
-                  <div className="freq-toggle">
-                    <button type="button" className={!wk ? 'on' : ''} onClick={() => updateItem(i, { frequency: 'daily', timesPerWeek: null })}>Every day</button>
-                    <button type="button" className={wk ? 'on' : ''} onClick={() => updateItem(i, { frequency: 'weekly', timesPerWeek: it.timesPerWeek || 2 })}>A few times a week</button>
-                  </div>
-                  {wk && (
-                    <div className="freq-times">
-                      <button type="button" aria-label="Fewer times" onClick={() => updateItem(i, { timesPerWeek: Math.max(1, (it.timesPerWeek || 2) - 1) })}><Icon name="minus" size={14} /></button>
-                      <span>{it.timesPerWeek || 2}× / week</span>
-                      <button type="button" aria-label="More times" onClick={() => updateItem(i, { timesPerWeek: Math.min(6, (it.timesPerWeek || 2) + 1) })}><Icon name="plus" size={14} /></button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )})}
+            {items.map((it, i) => (
+              <ItemRowEditor key={i} it={it}
+                onChange={(patch) => updateItem(i, patch)}
+                onRemove={() => removeItem(i)} />
+            ))}
             <div className="row-split" style={{ marginTop: 4 }}>
               <button className="btn btn-sm" onClick={() => addItem('photo')}><Icon name="camera" size={14} />Add photo item</button>
               <button className="btn btn-sm" onClick={() => addItem('check')}><Icon name="check" size={14} />Add checkmark</button>
+              <button className="btn btn-sm" onClick={() => addItem('timer')}><Icon name="clock" size={14} />Add timer</button>
             </div>
 
             {plan && (

@@ -13,10 +13,10 @@
 
 export const THEMES = [
   { key: 'linen', label: 'Paper', mode: 'soft',
-    blurb: 'Cream, near-black ink, and one terracotta spot. Editorial and warm.',
+    blurb: 'Cream, soft, and warm.',
     swatch: { bg: '#F2ECDF', a: '#C15A34', b: '#8A7360', text: '#1E1810' } },
   { key: 'navy', label: 'Noir', mode: 'dark',
-    blurb: 'Black, paper white, and the same terracotta. Sharp and focused.',
+    blurb: 'Black, sharp, and focused.',
     swatch: { bg: '#14110D', a: '#D2794A', b: '#8FB073', text: '#EFE7D8' } },
   { key: 'midnight', label: 'Midnight', mode: 'dark', legacy: true,
     blurb: 'The original. Yours stays as is.',

@@ -43,12 +43,16 @@ const nReq = (r) => r && ({
   multi: !!r.multi, minMinutes: r.min_minutes ?? null, optional: !!r.optional,
   isPrivate: !!r.is_private, // per-item override: others see icon + caption only
   frequency: r.frequency || 'daily', timesPerWeek: r.times_per_week ?? null, // weekly cadence
+  timesPerDay: r.times_per_day ?? null, // check items: completions needed per day (null/1 = once)
+  timesPerMonth: r.times_per_month ?? null, // monthly cadence target
+  captureOnly: !!r.capture_only, // photo items: camera-only (no uploads) when true
 })
 const nEntry = (r) => r && ({
   id: r.id, dayLogId: r.day_log_id, requirementId: r.requirement_id,
   challengeId: r.challenge_id, userId: r.user_id, photoPath: r.photo_path,
   photoPaths: r.photo_paths?.length ? r.photo_paths : (r.photo_path ? [r.photo_path] : []),
-  checked: r.checked, aiFlag: r.ai_flag, aiNote: r.ai_note, aiDismissed: r.ai_dismissed,
+  checked: r.checked, checkCount: r.check_count ?? null,
+  aiFlag: r.ai_flag, aiNote: r.ai_note, aiDismissed: r.ai_dismissed,
   caption: r.caption ?? null, estProtein: r.est_protein ?? null, estCalories: r.est_calories ?? null,
 })
 const nPlan = (r) => r && ({
@@ -279,14 +283,27 @@ async function insertRequirementRows(challengeId, userId, items) {
     hint: it.hint || null, group_label: it.group || null, icon: it.icon || (it.kind === 'photo' ? 'camera' : 'bolt'),
     kind: it.kind, sort: i + 1,
     multi: it.kind === 'photo' ? !!it.multi : false,
-    min_minutes: it.kind === 'photo' && it.minMinutes ? Number(it.minMinutes) : null,
-    frequency: it.frequency === 'weekly' ? 'weekly' : 'daily',
+    min_minutes: it.kind === 'timer' ? (Number(it.minMinutes) || 10)
+      : it.kind === 'photo' && it.minMinutes ? Number(it.minMinutes) : null,
+    frequency: it.frequency === 'weekly' || it.frequency === 'monthly' ? it.frequency : 'daily',
     times_per_week: it.frequency === 'weekly' ? Math.min(6, Math.max(1, Number(it.timesPerWeek) || 2)) : null,
+    times_per_month: it.frequency === 'monthly' ? Math.min(10, Math.max(1, Number(it.timesPerMonth) || 1)) : null,
+    times_per_day: it.kind === 'check' && Number(it.timesPerDay) > 1 ? Math.min(6, Math.round(Number(it.timesPerDay))) : null,
+    capture_only: it.kind === 'photo' ? !!it.captureOnly : false,
   }))
+  // Pre-migration repair ladder: strip newer columns, degrade timer→check
+  // (the old kind constraint), or BOTH — whichever the error calls for. A
+  // timer item created before the SQL lands needs strip AND degrade together.
+  const stripNew = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, times_per_day: _d, times_per_month: _tm, capture_only: _c, ...r }) => r
+  const degradeKind = (r) => (r.kind === 'timer' ? { ...r, kind: 'check' } : r)
+  const MIGRATABLE = /kind|multi|min_minutes|frequency|times_per_week|times_per_day|times_per_month|capture_only/
   let { error } = await supabase.from('requirements').insert(rows)
-  if (error && /multi|min_minutes|frequency|times_per_week/.test(error.message || '')) {
-    const legacy = rows.map(({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, ...r }) => r)
-    ;({ error } = await supabase.from('requirements').insert(legacy))
+  if (error) {
+    for (const candidate of [rows.map(stripNew), rows.map(degradeKind), rows.map(degradeKind).map(stripNew)]) {
+      if (!MIGRATABLE.test(error.message || '')) break
+      ;({ error } = await supabase.from('requirements').insert(candidate))
+      if (!error) break
+    }
   }
   if (error) throw error
 }
@@ -334,27 +351,38 @@ export async function syncMyRequirements(challengeId, userId, items) {
     key: it.key, label: it.label, hint: it.hint || null, group_label: it.group || null,
     icon: it.icon || (it.kind === 'photo' ? 'camera' : 'bolt'), kind: it.kind, sort: i + 1,
     multi: it.kind === 'photo' ? !!it.multi : false,
-    min_minutes: it.kind === 'photo' && it.minMinutes ? Number(it.minMinutes) : null,
-    frequency: it.frequency === 'weekly' ? 'weekly' : 'daily',
+    min_minutes: it.kind === 'timer' ? (Number(it.minMinutes) || 10)
+      : it.kind === 'photo' && it.minMinutes ? Number(it.minMinutes) : null,
+    frequency: it.frequency === 'weekly' || it.frequency === 'monthly' ? it.frequency : 'daily',
     times_per_week: it.frequency === 'weekly' ? Math.min(6, Math.max(1, Number(it.timesPerWeek) || 2)) : null,
+    times_per_month: it.frequency === 'monthly' ? Math.min(10, Math.max(1, Number(it.timesPerMonth) || 1)) : null,
+    times_per_day: it.kind === 'check' && Number(it.timesPerDay) > 1 ? Math.min(6, Math.round(Number(it.timesPerDay))) : null,
+    capture_only: it.kind === 'photo' ? !!it.captureOnly : false,
   })
-  const strip = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, ...r }) => r
+  // Same pre-migration repair ladder as insertRequirementRows: strip newer
+  // columns, degrade timer→check, or both.
+  const strip = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, times_per_day: _d, times_per_month: _tm, capture_only: _c, ...r }) => r
+  const degradeKind = (r) => (r.kind === 'timer' ? { ...r, kind: 'check' } : r)
+  const MIGRATABLE = /kind|multi|min_minutes|frequency|times_per_week|times_per_day|times_per_month|capture_only/
+  const writeWithRepairs = async (row, write) => {
+    let { error } = await write(row)
+    if (error) {
+      for (const candidate of [strip(row), degradeKind(row), strip(degradeKind(row))]) {
+        if (!MIGRATABLE.test(error.message || '')) break
+        ;({ error } = await write(candidate))
+        if (!error) break
+      }
+    }
+    if (error) throw error
+  }
   for (let i = 0; i < items.length; i++) {
     const it = items[i]
     const row = rowFor(it, i)
     if (it.id) {
-      let { error } = await supabase.from('requirements').update(row).eq('id', it.id)
-      if (error && /multi|min_minutes|frequency|times_per_week/.test(error.message || '')) {
-        ;({ error } = await supabase.from('requirements').update(strip(row)).eq('id', it.id))
-      }
-      if (error) throw error
+      await writeWithRepairs(row, (r) => supabase.from('requirements').update(r).eq('id', it.id))
     } else {
-      const full = { ...row, challenge_id: challengeId, user_id: userId }
-      let { error } = await supabase.from('requirements').insert(full)
-      if (error && /multi|min_minutes|frequency|times_per_week/.test(error.message || '')) {
-        ;({ error } = await supabase.from('requirements').insert(strip(full)))
-      }
-      if (error) throw error
+      await writeWithRepairs({ ...row, challenge_id: challengeId, user_id: userId },
+        (r) => supabase.from('requirements').insert(r))
     }
   }
 }
@@ -448,6 +476,22 @@ export async function setChecked(challengeId, userId, logDate, req, checked) {
   return upsertEntry(dl.id, req, userId, { checked })
 }
 
+// Multi-a-day check items: store today's tap count; `checked` mirrors whether
+// the target is met so every reader of the boolean stays correct. Pre-migration
+// (no check_count column) it degrades to the plain boolean.
+export async function setCheckCount(challengeId, userId, logDate, req, count) {
+  const dl = await ensureDayLog(challengeId, userId, logDate)
+  const target = req.timesPerDay || 1
+  try {
+    return await upsertEntry(dl.id, req, userId, { check_count: count, checked: count >= target })
+  } catch (e) {
+    if (/check_count/.test(e?.message || '')) {
+      return upsertEntry(dl.id, req, userId, { checked: count > 0 })
+    }
+    throw e
+  }
+}
+
 export async function dismissAiFlag(entryId) {
   const { error } = await supabase.from('log_entries').update({ ai_dismissed: true }).eq('id', entryId)
   if (error) throw error
@@ -524,14 +568,23 @@ export async function coachChat(messages) {
 // but the proposal it returns is a whole challenge (name, dayCount, checklist,
 // format) the user reviews and creates.
 export async function onboardChat(messages) {
-  const { data } = await supabase.auth.getSession()
-  const token = data?.session?.access_token
-  if (!token) throw new Error('not signed in')
-  const res = await fetch(`${API_BASE}/api/onboard-coach`, {
+  // A tab that slept for hours wakes with an expired token; refresh and retry
+  // instead of surfacing "couldn't reach" for something we can heal ourselves.
+  const call = (token) => fetch(`${API_BASE}/api/onboard-coach`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ messages }),
   })
+  let token = (await supabase.auth.getSession()).data?.session?.access_token
+  if (!token) {
+    token = (await supabase.auth.refreshSession()).data?.session?.access_token
+    if (!token) throw new Error('not signed in')
+  }
+  let res = await call(token)
+  if (res.status === 401) {
+    const fresh = (await supabase.auth.refreshSession()).data?.session?.access_token
+    if (fresh) res = await call(fresh)
+  }
   if (!res.ok) throw new Error('coach unavailable')
   return res.json() // { reply, proposal }
 }

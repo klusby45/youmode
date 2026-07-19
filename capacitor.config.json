@@ -1,5 +1,9 @@
 {
   "appId": "com.youmode.app",
   "appName": "You Mode",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "url": "https://youmode.app",
+    "allowNavigation": ["youmode.app", "*.supabase.co"]
+  }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { syncDailyReminder } from './lib/native.js'
 import * as api from './data.js'
 import { todayInTz, currentDayNumber, summarize, deriveFormat, isLogComplete } from './lib/challenge.js'
 import { getStoredTheme, applyTheme, normalizeTheme, themeMode, mapAccent } from './theme.js'
@@ -14,9 +15,18 @@ import OnboardCoach from './components/OnboardCoach.jsx'
 import Today from './components/Today.jsx'
 import Standings from './components/Standings.jsx'
 import RenameSheet from './components/RenameSheet.jsx'
+import EditChecklistSheet from './components/EditChecklistSheet.jsx'
 import History from './components/History.jsx'
 import Goals from './components/Goals.jsx'
 import JudgeQueue from './components/JudgeQueue.jsx'
+
+// Rides the signed-in tree so its hook order is stable: keeps the native
+// daily reminder scheduled while a challenge is live, cleared otherwise.
+// Renders nothing; no-op on the web.
+function ReminderSync({ on }) {
+  useEffect(() => { syncDailyReminder(on) }, [on])
+  return null
+}
 
 export default function App() {
   // Password-reset link target (youmode.app/reset?token=...) — handled before
@@ -40,6 +50,8 @@ export default function App() {
   const [tone, setToneState] = useState(getStoredTone)
   const [youOpen, setYouOpen] = useState(false)
   const [renaming, setRenaming] = useState(false)
+  const [editingList, setEditingList] = useState(false)
+  const [creatingNew, setCreatingNew] = useState(false) // building an ADDITIONAL challenge
 
   // Gate on userId: logged-out visitors keep the sunrise boot paint, and a
   // fresh visitor's mount must NOT persist 'midnight' to localStorage (that
@@ -200,7 +212,7 @@ export default function App() {
 
   const actions = useMemo(() => ({
     refresh, signOut, switchChallenge,
-    uploadProof: api.uploadProof, clearPhotos: api.clearPhotos, setChecked: api.setChecked,
+    uploadProof: api.uploadProof, clearPhotos: api.clearPhotos, setChecked: api.setChecked, setCheckCount: api.setCheckCount,
     saveCaption: api.saveCaption, estimateMeal: api.estimateMeal, addWeighIn: api.addWeighIn,
     dismissAiFlag: api.dismissAiFlag, reviewDay: api.reviewDay,
     updateMyMember: api.updateMyMember, renameChallenge: api.renameChallenge, signedUrl: api.signedUrl,
@@ -274,11 +286,14 @@ export default function App() {
     )
   }
 
-  if (!active) {
+  if (!active || creatingNew) {
     return (
       <>
         <style>{THEME}</style>
-        <OnboardCoach profile={bundle.profile} onDone={() => refresh()} signOut={signOut}
+        <OnboardCoach profile={bundle.profile}
+          onDone={async () => { await refresh(); setCreatingNew(false) }}
+          onCancel={creatingNew ? () => setCreatingNew(false) : undefined}
+          signOut={signOut}
           theme={theme} tone={tone} pickTheme={pickTheme} pickTone={pickTone} />
       </>
     )
@@ -297,9 +312,12 @@ export default function App() {
   const maxDays = Math.max(cfg.totalDays, ...participants.map((p) => p.totalDays || 0))
   const myDays = isReferee ? maxDays : daysFor(me.id)
 
+  // "Standings" reads like a competition — right for versus, wrong for a solo
+  // run or a support crew (Miska). The tab renames itself to match the format.
+  const standingsLabel = cfg.format === 'solo' ? 'Progress' : cfg.format === 'versus' ? 'Standings' : 'Team'
   const tabs = [
     ...(!isReferee ? [['today', 'today', 'Today']] : []),
-    ['standings', 'versus', 'Standings'],
+    ['standings', 'versus', standingsLabel],
     ...(isReferee ? [['judge', 'gavel', 'Judge']] : []),
     ['history', 'grid', 'History'],
     ...(anyGoals ? [['goals', 'target', 'Goals']] : []),
@@ -339,7 +357,10 @@ export default function App() {
             </div>
           )}
           <div className="daypill">
-            {dayNum < 1 ? <>STARTS SOON</> : dayNum > myDays ? <>COMPLETE</> : (
+            {dayNum < 1 ? (
+              // Countdown beats a vague "starts soon" (Miska).
+              <>{1 - dayNum === 1 ? 'STARTS TOMORROW' : `STARTS IN ${1 - dayNum} DAYS`}</>
+            ) : dayNum > myDays ? <>COMPLETE</> : (
               <><span className="daypill-k">DAY</span><span className="daypill-n">{dayNum}</span><span className="daypill-t">/ {myDays}</span></>
             )}
           </div>
@@ -370,7 +391,21 @@ export default function App() {
             email={me.email}
             onSaveEmail={async (v) => { await api.saveEmail(me.id, v); await refresh() }}
             onDeleteAccount={deleteAccount}
+            onEditChecklist={!isReferee ? () => { setYouOpen(false); setEditingList(true) } : null}
+            onNewChallenge={() => { setYouOpen(false); setCreatingNew(true) }}
             onClose={() => setYouOpen(false)} />
+        )}
+        {editingList && (
+          <EditChecklistSheet
+            reqs={reqsFor(me.id).filter((r) => !api.isExtraMeal(r))}
+            onSave={async (items) => {
+              // Body-plan extra meal slots ride along untouched so the sync
+              // (which deletes rows missing from the list) never drops them.
+              const hidden = reqsFor(me.id).filter((r) => api.isExtraMeal(r))
+              await api.syncMyRequirements(active.challenge.id, me.id, [...items, ...hidden])
+              await refresh()
+            }}
+            onClose={() => setEditingList(false)} />
         )}
         {renaming && (
           <RenameSheet current={active.challenge.name}
@@ -378,6 +413,7 @@ export default function App() {
             onClose={() => setRenaming(false)} />
         )}
 
+        <ReminderSync on={!isReferee && dayNum <= myDays} />
         <main className="view">
           {activeView === 'today' && <Today />}
           {activeView === 'standings' && <Standings />}
@@ -522,7 +558,7 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .rename-chip{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font:inherit}
 .rename-chip svg{opacity:.6}
 .rename-chip:active{color:var(--text)}
-.daypill{display:flex;align-items:baseline;gap:6px;padding:7px 14px;border:1px solid var(--line-2);
+.daypill{display:flex;align-items:baseline;gap:6px;padding:7px 14px;white-space:nowrap;border:1px solid var(--line-2);
   border-radius:999px;background:var(--daypill-bg);font-family:var(--cond);letter-spacing:1px}
 .daypill-k{font-size:11px;color:var(--muted);font-weight:600}
 .daypill-n{font-family:var(--num-font);font-size:20px;line-height:1}
@@ -1409,7 +1445,27 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 /* Cadence editor: a builder row that also carries a daily/weekly choice stacks
    its controls (.br-main) above a cadence sub-row (.br-cadence). */
 .builder-row.br-multi{flex-direction:column;align-items:stretch;gap:8px}
-.br-main{display:flex;align-items:flex-start;gap:8px}
+.br-main{display:flex;align-items:center;gap:8px;justify-content:space-between}
+/* Photo/Check as a visible either-or (Mayssa couldn't tell the old single
+   badge was tappable) — same segmented language as the cadence pills. */
+.kind-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden}
+.kind-seg button{font-family:var(--cond);font-size:10px;letter-spacing:.6px;text-transform:uppercase;
+  padding:6px 10px;color:var(--muted);background:transparent;border:none;cursor:pointer}
+.kind-seg button+button{border-left:1px solid var(--line-2)}
+.kind-seg button.on{background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand)}
+.lin .kind-seg,.lin .kind-seg button+button{border-color:var(--lpc-line)}
+.lin .kind-seg button{color:var(--lpc-mut)}
+.lin .kind-seg button.on{background:color-mix(in srgb,var(--lpc-gold) 16%,transparent);color:var(--lpc-gold)}
+/* Day count is typeable (tap the number), ± still nudge. High-specificity +
+   unsets so the global field/input pill styling can't repaint it. */
+.oc-stepper input.oc-step-in,.lin .oc-stepper input.oc-step-in,.field .oc-stepper input.oc-step-in{
+  width:46px;background:transparent;border:none;border-radius:0;box-shadow:none;color:inherit;
+  font:inherit;text-align:center;padding:0;margin:0;height:auto;
+  border-bottom:1px dashed color-mix(in srgb,currentColor 35%,transparent);-moz-appearance:textfield;appearance:textfield}
+.oc-stepper input.oc-step-in:focus{outline:none;border-bottom-style:solid}
+.oc-step-in::-webkit-outer-spin-button,.oc-step-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+/* Partial progress number inside a multi-a-day check square ("1" of 2) */
+.wt-box .wt-count{font-family:var(--cond);font-weight:700;font-size:13px;color:var(--blue)}
 /* Label + hint stack full-width so long titles wrap instead of clipping. */
 .br-fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;padding-top:5px}
 .br-main .br-label{font-weight:600}

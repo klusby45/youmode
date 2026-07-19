@@ -34,26 +34,16 @@ export default function Standings() {
     const top = summaries[r[0]?.userId]?.approved ?? 0
     return top > 0 && top > (summaries[r[1]?.userId]?.approved ?? 0) ? r[0].userId : null
   })()
-  const title = solo ? t('standings.title.solo')
-    : format === 'accountability' ? t('standings.title.accountability')
-    : t('standings.title.group')
-
+  // No hero header: the topbar already shows the challenge name and status
+  // (Miska: "it already says the name of my challenge right above that").
+  // Groups keep a slim invite-code row so new people can still be added.
   return (
     <div>
-      <div className="screen-head">
-        <div>
-          <div className="screen-title">{title}</div>
-          <div className="screen-sub">
-            {amOwner ? (
-              <button className="rename-chip" onClick={() => setRenaming(true)} title="Rename challenge">
-                {challenge.name} <Icon name="edit" size={11} />
-              </button>
-            ) : challenge.name}
-            {' · '}{dayNum < 1 ? 'starts ' + cfg.startStr : dayNum > cfg.totalDays ? 'complete' : `Day ${dayNum} of ${cfg.totalDays}`}
-          </div>
+      {!solo && (
+        <div className="screen-head" style={{ justifyContent: 'flex-end' }}>
+          <span className="chip chip-muted">invite code {challenge.joinCode}</span>
         </div>
-        <span className="chip chip-muted">code {challenge.joinCode}</span>
-      </div>
+      )}
 
       {format === 'community' ? (
         <Leaderboard participants={participants} summaries={summaries} daysFor={daysFor} meId={me.id}
@@ -62,14 +52,16 @@ export default function Standings() {
         <div className={'scoreboard' + (solo ? ' solo' : format === 'accountability' ? ' grid' : '')}>
           {participants.map((p, i) => (
             <Fragment key={p.id}>
-              <Column s={summaries[p.userId]} p={p} totalDays={daysFor(p.userId)} isLeader={p.userId === leaderId} />
+              <Column s={summaries[p.userId]} p={p} totalDays={daysFor(p.userId)} isLeader={p.userId === leaderId} solo={solo} />
               {format === 'versus' && i === 0 && participants.length === 2 && <div className="vs-divider">VS</div>}
             </Fragment>
           ))}
         </div>
       )}
 
-      {referee ? (
+      {/* No-referee challenges get no explainer strip: automatic day counting
+          is just how the app works, not something to re-announce (Miska). */}
+      {referee && (
         <div className="ref-strip">
           <span className="rs-head">{referee.stakeImage ? <img src={referee.stakeImage} alt="" /> : <Icon name="gavel" size={20} />}</span>
           <span>
@@ -77,25 +69,24 @@ export default function Standings() {
             <span className="rs-sub">{t('standings.ref.sub')}</span>
           </span>
         </div>
-      ) : (
-        <div className="ref-strip">
-          <span className="rs-head"><Icon name="bolt" size={20} /></span>
-          <span>
-            <span className="rs-name" style={{ display: 'block' }}>{t('standings.honor.title')}</span>
-            <span className="rs-sub">{t('standings.honor.sub')}</span>
-          </span>
-        </div>
       )}
 
-      <div className="section-label">Today's progress</div>
-      {started ? (
-        participants.map((p) => (
-          <PersonRow key={p.id} p={p} reqs={reqsFor(p.userId)} mine={p.userId === me.id}
-            log={todayLog(p.userId)} onOpen={() => setProof(p)} t={t}
-            days={daysFor(p.userId)} approved={summaries[p.userId]?.approved ?? 0} />
-        ))
-      ) : (
-        <div className="card center muted" style={{ padding: 18 }}>Daily progress unlocks {cfg.startStr}.</div>
+      {/* Solo: no "Today's progress" section at all — it would restate the
+          Today tab with your own name on it (Miska's no-repetition rule).
+          Groups keep it: seeing everyone's day side by side IS the point. */}
+      {!solo && (
+        <>
+          <div className="section-label">Today's progress</div>
+          {started ? (
+            participants.map((p) => (
+              <PersonRow key={p.id} p={p} reqs={reqsFor(p.userId)} mine={p.userId === me.id}
+                log={todayLog(p.userId)} onOpen={() => setProof(p)} t={t}
+                days={daysFor(p.userId)} approved={summaries[p.userId]?.approved ?? 0} />
+            ))
+          ) : (
+            <div className="card center muted" style={{ padding: 18 }}>Everyone's daily goals will show up here when the challenge starts.</div>
+          )}
+        </>
       )}
 
       {stakers.length > 0 && (
@@ -167,8 +158,31 @@ function MiniRing({ pct, color }) {
   )
 }
 
-function Column({ s, p, totalDays, isLeader }) {
+function Column({ s, p, totalDays, isLeader, solo }) {
   if (!s || !p) return null
+  if (solo) {
+    // Solo (Miska): no name (it's obviously you), no pass/fail/pend trio (History
+    // shows that) — one consolidated stat line plus the bar she likes.
+    const bits = []
+    if (s.streak > 0) bits.push(`${s.streak} day streak`)
+    if (s.pending > 0) bits.push(`${s.pending} pending`)
+    if (s.failed > 0) bits.push(`${s.failed} missed`)
+    return (
+      <div className="vs-col">
+        <div className="vs-day" style={{ color: p.accent }}>{s.approved}<small> of {totalDays} days passed</small></div>
+        {bits.length > 0 && (
+          <div className="vs-streak">
+            {s.streak > 0 && <Icon name="flame" size={14} fill="var(--amber)" />}
+            {bits.join(' · ')}
+          </div>
+        )}
+        <div className="bar" style={{ marginTop: 12 }}>
+          <div className="bar-fill" style={{ width: s.completionPct + '%', background: p.accent }} />
+        </div>
+        <div className="vs-mini-l" style={{ marginTop: 6 }}>{s.completionPct}% complete</div>
+      </div>
+    )
+  }
   return (
     <div className="vs-col">
       <div className="vs-name">
@@ -235,7 +249,7 @@ function PersonRow({ p, reqs, mine, log, onOpen, t, days, approved }) {
       <div className="tc-foot">
         <span className={'chip ' + m.chip}><Icon name={m.icon} size={12} />{m.label}</span>
         {hasAiFlags && <span className="chip chip-amber" style={{ marginLeft: 8 }}><Icon name="bolt" size={12} />AI flag</span>}
-        <span className="tc-tap">See proof <Icon name="chevron" size={13} /></span>
+        <span className="tc-tap">See their day <Icon name="chevron" size={13} /></span>
       </div>
     </button>
   )

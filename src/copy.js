@@ -3,9 +3,11 @@
 // change); coach and monk soften it. A voice missing a key falls back to
 // hardcore, so partial coverage never breaks a screen.
 export const VOICES = [
-  { key: 'monk', label: 'Monk', preview: 'Each day passes through their hands. Trust the process.' },
-  { key: 'coach', label: 'Coach', preview: 'Honest calls keep this fair for everyone.' },
-  { key: 'hardcore', label: 'Hard Core', preview: 'Pass or fail, no appeals.' },
+  // Previews explain what each voice MEANS for how the app holds you
+  // accountable (Miska: "idk what this even means, let's explain that").
+  { key: 'monk', label: 'Monk', preview: 'Calm and gentle. Quiet encouragement, never pressure.' },
+  { key: 'coach', label: 'Coach', preview: 'Supportive but honest, like a trainer who wants you to win.' },
+  { key: 'hardcore', label: 'Hard Core', preview: 'Blunt and demanding. No excuses, no sugarcoating.' },
 ]
 
 const TONE_KEY = '75hard-tone'

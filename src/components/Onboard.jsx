@@ -4,6 +4,7 @@ import { CLASSIC_TEMPLATE, detectTimezone, slugify } from '../config.js'
 import { pinChrome } from '../theme.js'
 import { todayInTz } from '../lib/challenge.js'
 import Icon from './Icons.jsx'
+import ItemRowEditor from './ItemRowEditor.jsx'
 import { ColorwayVoiceStep, ShareCodeStep } from './PostCreateSteps.jsx'
 
 export const FORMATS = [
@@ -15,9 +16,11 @@ export const FORMATS = [
 
 // The guided start: one decision per screen, fixed warm copy (the user picks
 // their voice at the "yours" step; copyFor kicks in post-pick, in-app).
-const STEPS = ['format', 'basics', 'checklist', 'stakes', 'yours', 'code']
+// Format ("who's doing this with you") sits near the END, not the front —
+// people know their goal before they know their crew (Miska, 2026-07-18).
+const STEPS = ['basics', 'checklist', 'format', 'stakes', 'yours', 'code']
 
-export default function Onboard({ profile, onDone, signOut, onUseGuide, theme, tone, pickTheme, pickTone }) {
+export default function Onboard({ profile, onDone, signOut, onCancel, onUseGuide, theme, tone, pickTheme, pickTone }) {
   const [step, setStep] = useState('welcome')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
@@ -29,6 +32,7 @@ export default function Onboard({ profile, onDone, signOut, onUseGuide, theme, t
   const [name, setName] = useState(`${profile.displayName}'s Challenge`)
   const [format, setFormat] = useState('versus')
   const [startDate, setStartDate] = useState(todayInTz(tz))
+  const [dayCount, setDayCount] = useState(75)
   const [stake, setStake] = useState('')
   const [template, setTemplate] = useState('classic') // classic | blank
   const [items, setItems] = useState(CLASSIC_TEMPLATE.map((t) => ({ ...t })))
@@ -46,7 +50,7 @@ export default function Onboard({ profile, onDone, signOut, onUseGuide, theme, t
     setItems((xs) => xs.filter((_, j) => j !== i))
   }
   function addItem(kind) {
-    setItems((xs) => [...xs, { key: '', label: '', hint: '', group: 'Custom', icon: kind === 'photo' ? 'camera' : 'bolt', kind }])
+    setItems((xs) => [...xs, { key: '', label: '', hint: '', group: 'Custom', icon: kind === 'photo' ? 'camera' : kind === 'timer' ? 'clock' : 'bolt', kind, ...(kind === 'timer' ? { minMinutes: 10 } : {}) }])
   }
   function seedTemplate(kind) {
     setTemplate(kind)
@@ -74,7 +78,7 @@ export default function Onboard({ profile, onDone, signOut, onUseGuide, theme, t
       const final = finalizeItems()
       if (!final.length) throw new Error('Add at least one daily item')
       const ch = await api.createChallenge(
-        { name: name.trim() || 'My Challenge', format, startDate, timezone: tz, stakeText: format !== 'solo' && stake.trim() ? stake.trim() : null, items: final },
+        { name: name.trim() || 'My Challenge', format, startDate, timezone: tz, stakeText: format !== 'solo' && stake.trim() ? stake.trim() : null, items: final, dayCount: Math.min(365, Math.max(7, Math.round(Number(dayCount)) || 75)) },
         profile.id,
       )
       // Solo has no one to invite, so skip the invite step and start Day 1.
@@ -130,18 +134,20 @@ export default function Onboard({ profile, onDone, signOut, onUseGuide, theme, t
           <>
             <div className="screen-title center">Hey {profile.displayName}, let's build your challenge.</div>
             <p className="center muted onb-sub-lg">A few quick picks. You can change all of it later.</p>
-            <button className="btn btn-accent btn-block" style={{ marginTop: 18 }} onClick={next('format')}>
+            <button className="btn btn-accent btn-block" style={{ marginTop: 18 }} onClick={next('basics')}>
               Let's build it →
             </button>
             {onUseGuide && <button className="auth-flip" onClick={onUseGuide}>← Back to the guided setup</button>}
             <button className="auth-flip" onClick={next('join')}>Have an invite code? Join instead</button>
-            <button className="auth-flip" onClick={signOut}>Sign out</button>
+            {onCancel ? <button className="auth-flip" onClick={onCancel}>← Back to my challenge</button>
+              : <button className="auth-flip" onClick={signOut}>Sign out</button>}
           </>
         )}
 
         {step === 'format' && (
           <>
-            <div className="screen-title">How do you want to run it?</div>
+            <div className="screen-title">Who's doing this with you?</div>
+            <p className="muted onb-sub-lg">Just you, or bring people in. You can share an invite code after.</p>
             <div className="fmt-picker" style={{ marginTop: 16 }}>
               {FORMATS.map((f) => (
                 <button key={f.key} type="button" className={'fmt-chip' + (format === f.key ? ' active' : '')} onClick={() => setFormat(f.key)}>
@@ -151,15 +157,15 @@ export default function Onboard({ profile, onDone, signOut, onUseGuide, theme, t
               ))}
             </div>
             <p className="muted" style={{ fontSize: 13, margin: '10px 2px 18px' }}>{FORMATS.find((f) => f.key === format).blurb}</p>
-            <button className="btn btn-accent btn-block" onClick={next('basics')}>Next →</button>
-            <button className="auth-flip" onClick={back('welcome')}>Back</button>
+            <button className="btn btn-accent btn-block" onClick={next(format === 'solo' ? 'yours' : 'stakes')}>Next →</button>
+            <button className="auth-flip" onClick={back('checklist')}>Back</button>
             <button className="auth-flip" onClick={next('join')}>Have an invite code? Join instead</button>
           </>
         )}
 
         {step === 'basics' && (
           <>
-            <div className="screen-title">Name it. Pick day 1.</div>
+            <div className="screen-title">Give it a name and a start date.</div>
             <div className="field" style={{ marginTop: 16 }}>
               <label>Challenge name</label>
               <input value={name} onChange={(e) => setName(e.target.value)} />
@@ -168,37 +174,49 @@ export default function Onboard({ profile, onDone, signOut, onUseGuide, theme, t
               <label>Start date</label>
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
+            <div className="field">
+              <label>Days</label>
+              <div className="oc-stepper">
+                <button type="button" aria-label="Fewer days"
+                  onClick={() => setDayCount((d) => Math.max(7, (Number(d) || 75) - 1))}><Icon name="minus" size={16} /></button>
+                <span className="oc-step-n">
+                  <input className="oc-step-in" type="number" inputMode="numeric" min={7} max={365}
+                    value={dayCount} aria-label="Number of days"
+                    onChange={(e) => setDayCount(e.target.value)}
+                    onBlur={() => setDayCount((d) => Math.min(365, Math.max(7, Math.round(Number(d)) || 75)))} />
+                  days
+                </span>
+                <button type="button" aria-label="More days"
+                  onClick={() => setDayCount((d) => Math.min(365, (Number(d) || 75) + 1))}><Icon name="plus" size={16} /></button>
+              </div>
+            </div>
             <p className="muted" style={{ fontSize: 12, margin: '2px 2px 16px' }}>Timezone: {tz}</p>
             <button className="btn btn-accent btn-block" onClick={next('checklist')}>Next →</button>
-            <button className="auth-flip" onClick={back('format')}>Back</button>
+            <button className="auth-flip" onClick={back('welcome')}>Back</button>
           </>
         )}
 
         {step === 'checklist' && (
           <>
             <div className="screen-title">What does showing up look like?</div>
-            <p className="muted onb-sub-lg">Every item is a daily promise, logged as photo proof or a simple check.</p>
+            <p className="muted onb-sub-lg">List what you'll do, and prove each one your way: a photo, a checkmark, or a built-in timer.</p>
             <div className="row-split" style={{ margin: '14px 0 12px' }}>
-              <button className={'btn btn-sm' + (template === 'classic' ? ' btn-accent' : '')} onClick={() => seedTemplate('classic')}>75 Hard classic</button>
-              <button className={'btn btn-sm' + (template === 'blank' ? ' btn-accent' : '')} onClick={() => seedTemplate('blank')}>Start blank</button>
+              <button className={'btn btn-sm' + (template === 'classic' ? ' btn-accent' : '')} onClick={() => seedTemplate('classic')}>Template: 75 Hard</button>
+              <button className={'btn btn-sm' + (template === 'blank' ? ' btn-accent' : '')} onClick={() => seedTemplate('blank')}>Make your own</button>
             </div>
             {items.map((it, i) => (
-              <div className="builder-row" key={i}>
-                <button className={'kind-toggle ' + it.kind} onClick={() => updateItem(i, { kind: it.kind === 'photo' ? 'check' : 'photo', icon: it.kind === 'photo' ? 'bolt' : 'camera' })}>
-                  {it.kind === 'photo' ? '📷 Photo' : '✓ Check'}
-                </button>
-                <input className="br-label" value={it.label} placeholder="e.g. Home-cooked meal" onChange={(e) => updateItem(i, { label: e.target.value })} />
-                <input className="br-hint" value={it.hint || ''} placeholder="detail (optional)" onChange={(e) => updateItem(i, { hint: e.target.value })} />
-                <button className="br-del" onClick={() => removeItem(i)} title="Remove"><Icon name="x" size={15} /></button>
-              </div>
+              <ItemRowEditor key={i} it={it}
+                onChange={(patch) => updateItem(i, patch)}
+                onRemove={() => removeItem(i)} />
             ))}
             <div className="row-split" style={{ marginTop: 4 }}>
               <button className="btn btn-sm" onClick={() => addItem('photo')}><Icon name="camera" size={14} />Add photo item</button>
               <button className="btn btn-sm" onClick={() => addItem('check')}><Icon name="check" size={14} />Add checkmark</button>
+              <button className="btn btn-sm" onClick={() => addItem('timer')}><Icon name="clock" size={14} />Add timer</button>
             </div>
             {err && <div className="login-err">{err}</div>}
             <button className="btn btn-accent btn-block" style={{ marginTop: 14 }}
-              onClick={() => (finalizeItems().length ? next('stakes')() : setErr('Add at least one daily item'))}>
+              onClick={() => (finalizeItems().length ? next('format')() : setErr('Add at least one item'))}>
               Next →
             </button>
             <button className="auth-flip" onClick={back('basics')}>Back</button>
@@ -207,13 +225,13 @@ export default function Onboard({ profile, onDone, signOut, onUseGuide, theme, t
 
         {step === 'stakes' && (
           <>
-            <div className="screen-title">Want something on the line?</div>
-            <p className="muted onb-sub-lg">Optional. A stake your crew holds you to if you miss a day.</p>
+            <div className="screen-title">Add a friendly stake?</div>
+            <p className="muted onb-sub-lg">Optional. If someone misses a day, this is what they owe the group.</p>
             <div className="field" style={{ marginTop: 14 }}>
               <input value={stake} onChange={(e) => setStake(e.target.value)} placeholder="e.g. buy the coffees for a month" />
             </div>
             <button className="btn btn-accent btn-block" onClick={next('yours')}>{stake.trim() ? 'Set my stake' : 'Skip for now'}</button>
-            <button className="auth-flip" onClick={back('checklist')}>Back</button>
+            <button className="auth-flip" onClick={back('format')}>Back</button>
           </>
         )}
 
@@ -221,7 +239,7 @@ export default function Onboard({ profile, onDone, signOut, onUseGuide, theme, t
           <ColorwayVoiceStep
             theme={theme} tone={tone} pickTheme={pickTheme} pickTone={pickTone}
             primaryLabel="Create my challenge" busyLabel="Creating…" busy={busy} err={err}
-            onPrimary={doCreate} onBack={back('stakes')} />
+            onPrimary={doCreate} onBack={back(format === 'solo' ? 'format' : 'stakes')} />
         )}
 
         {step === 'code' && <ShareCodeStep code={createdCode} format={format} onDone={onDone} />}

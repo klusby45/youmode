@@ -24,6 +24,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>You Mode uses the microphone so you can speak your goal out loud and have it turned into a challenge.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>You Mode uses the camera to snap proof photos for your daily checklist.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>You Mode lets you upload photos and screenshots from your library as proof for checklist items.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

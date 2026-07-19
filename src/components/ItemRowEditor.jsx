@@ -1,0 +1,105 @@
+import Icon from './Icons.jsx'
+
+// One checklist item's editor row — shared by the AI review screen, the manual
+// builder, and the post-create Edit Checklist sheet, so the controls (and their
+// fixes) stay identical everywhere. Born from Mayssa's feedback (2026-07-17):
+//   • Photo/Check is a segmented control now — the old single flipping badge
+//     didn't read as tappable, so nobody knew items could switch kinds.
+//   • The weekly pill is labeled "Times a week" (was "A few times a week",
+//     which hid that you pick the number) and shows the count once active.
+//   • Daily check items get a per-day count ("2× a day") for AM/PM-style
+//     habits. Photos stay once-a-day; split them into two items instead.
+// GrowText: auto-growing textarea so long labels wrap instead of clipping.
+function GrowText({ className, value, placeholder, ariaLabel, onChange }) {
+  return (
+    <textarea
+      className={className} value={value} placeholder={placeholder} rows={1}
+      style={{ resize: 'none', overflow: 'hidden' }}
+      ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' } }}
+      aria-label={ariaLabel} onChange={onChange} />
+  )
+}
+
+export default function ItemRowEditor({ it, onChange, onRemove }) {
+  const wk = it.frequency === 'weekly'
+  const mo = it.frequency === 'monthly'
+  const perDay = Math.max(1, Number(it.timesPerDay) || 1)
+  return (
+    <div className="builder-row br-multi">
+      <div className="br-main">
+        <div className="kind-seg" role="group" aria-label="Log it as">
+          <button type="button" className={it.kind === 'photo' ? 'on' : ''} title="Prove it with a photo"
+            onClick={() => onChange({ kind: 'photo', icon: 'camera', timesPerDay: null })}>📷 Photo</button>
+          <button type="button" className={it.kind === 'check' ? 'on' : ''} title="Just check it off"
+            onClick={() => onChange({ kind: 'check', icon: 'bolt', captureOnly: false })}>✓ Check</button>
+          <button type="button" className={it.kind === 'timer' ? 'on' : ''} title="Run a built-in timer"
+            onClick={() => onChange({ kind: 'timer', icon: 'clock', captureOnly: false, timesPerDay: null, minMinutes: it.minMinutes || 10 })}>⏱ Timer</button>
+        </div>
+        <button className="br-del" onClick={onRemove} title="Remove"><Icon name="x" size={15} /></button>
+      </div>
+      <div className="br-fields">
+        <GrowText className="br-label" value={it.label} placeholder="e.g. 45-min workout" ariaLabel="Item name" onChange={(e) => onChange({ label: e.target.value })} />
+        <GrowText className="br-hint" value={it.hint || ''} placeholder="detail (optional)" ariaLabel="Detail" onChange={(e) => onChange({ hint: e.target.value })} />
+      </div>
+      <div className="br-cadence">
+        <div className="freq-toggle">
+          <button type="button" className={!wk && !mo ? 'on' : ''}
+            onClick={() => onChange({ frequency: 'daily', timesPerWeek: null, timesPerMonth: null })}>
+            {!wk && !mo && perDay > 1 ? `${perDay}× a day` : 'Every day'}
+          </button>
+          <button type="button" className={wk ? 'on' : ''}
+            onClick={() => onChange({ frequency: 'weekly', timesPerWeek: it.timesPerWeek || 2, timesPerMonth: null, timesPerDay: null })}>
+            {wk ? `${it.timesPerWeek || 2}× a week` : 'Weekly'}
+          </button>
+          <button type="button" className={mo ? 'on' : ''}
+            onClick={() => onChange({ frequency: 'monthly', timesPerMonth: it.timesPerMonth || 1, timesPerWeek: null, timesPerDay: null })}>
+            {mo ? `${it.timesPerMonth || 1}× a month` : 'Monthly'}
+          </button>
+        </div>
+        {wk && (
+          <div className="freq-times">
+            <button type="button" aria-label="Fewer times" onClick={() => onChange({ timesPerWeek: Math.max(1, (it.timesPerWeek || 2) - 1) })}><Icon name="minus" size={14} /></button>
+            <span>{it.timesPerWeek || 2}× / week</span>
+            <button type="button" aria-label="More times" onClick={() => onChange({ timesPerWeek: Math.min(6, (it.timesPerWeek || 2) + 1) })}><Icon name="plus" size={14} /></button>
+          </div>
+        )}
+        {mo && (
+          <div className="freq-times">
+            <button type="button" aria-label="Fewer times" onClick={() => onChange({ timesPerMonth: Math.max(1, (it.timesPerMonth || 1) - 1) })}><Icon name="minus" size={14} /></button>
+            <span>{it.timesPerMonth || 1}× / month</span>
+            <button type="button" aria-label="More times" onClick={() => onChange({ timesPerMonth: Math.min(10, (it.timesPerMonth || 1) + 1) })}><Icon name="plus" size={14} /></button>
+          </div>
+        )}
+        {!wk && !mo && it.kind === 'check' && (
+          <div className="freq-times">
+            <button type="button" aria-label="Fewer times a day" onClick={() => onChange({ timesPerDay: Math.max(1, perDay - 1) })}><Icon name="minus" size={14} /></button>
+            <span>{perDay === 1 ? 'once a day' : `${perDay}× a day`}</span>
+            <button type="button" aria-label="More times a day" onClick={() => onChange({ timesPerDay: Math.min(6, perDay + 1) })}><Icon name="plus" size={14} /></button>
+          </div>
+        )}
+      </div>
+      {it.kind === 'timer' && (
+        // The built-in countdown: finish it and the item checks itself.
+        <div className="br-cadence">
+          <div className="freq-times">
+            <button type="button" aria-label="Fewer minutes" onClick={() => onChange({ minMinutes: Math.max(1, (Number(it.minMinutes) || 10) - 5) })}><Icon name="minus" size={14} /></button>
+            <span>{Number(it.minMinutes) || 10} min timer</span>
+            <button type="button" aria-label="More minutes" onClick={() => onChange({ minMinutes: Math.min(180, (Number(it.minMinutes) || 10) + 5) })}><Icon name="plus" size={14} /></button>
+          </div>
+        </div>
+      )}
+      {it.kind === 'photo' && (
+        // Where the photo can come from: uploads welcome (Oura screenshots,
+        // saved pics) or camera-only for keep-yourself-honest live proof.
+        <div className="br-cadence">
+          <div className="freq-toggle">
+            <button type="button" className={!it.captureOnly ? 'on' : ''}
+              onClick={() => onChange({ captureOnly: false })}>Camera or upload</button>
+            <button type="button" className={it.captureOnly ? 'on' : ''}
+              onClick={() => onChange({ captureOnly: true })}>Camera only</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

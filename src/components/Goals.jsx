@@ -13,11 +13,9 @@ export default function Goals() {
   const [coaching, setCoaching] = useState(false)
   return (
     <div>
+      {/* No title — the Goals tab is the title (Miska). */}
       <div className="screen-head">
-        <div>
-          <div className="screen-title">{t('goals.title')}</div>
-          <div className="screen-sub">{t('goals.sub')}</div>
-        </div>
+        <div className="screen-sub">{t('goals.sub')}</div>
       </div>
       {participants.map((p) => {
         const theirPlans = plans.filter((pl) => pl.userId === p.userId)

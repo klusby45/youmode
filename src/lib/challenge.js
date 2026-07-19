@@ -42,17 +42,28 @@ export function currentDayNumber(startStr, todayStr) {
 
 // ── entries ───────────────────────────────────────────────────────────────
 // A log is { ..., entriesByReq: { [requirementId]: entry } }.
-export function entrySatisfies(req, entry) {
-  if (!entry) return false
-  return req.kind === 'photo' ? !!(entry.photoPaths?.length || entry.photoPath) : !!entry.checked
+
+// How many completions a check entry carries today. Rows written before the
+// check_count column existed only have the boolean, so fall back to 0/1.
+export function checkCount(entry) {
+  if (!entry) return 0
+  return entry.checkCount ?? (entry.checked ? 1 : 0)
 }
 
-// The daily-mandatory set. Two kinds of items never gate a day's X/N:
+export function entrySatisfies(req, entry) {
+  if (!entry) return false
+  if (req.kind === 'photo') return !!(entry.photoPaths?.length || entry.photoPath)
+  const target = req.timesPerDay || 1
+  return target > 1 ? checkCount(entry) >= target : !!entry.checked
+}
+
+// The daily-mandatory set. Some items never gate a day's X/N:
 //   • optional items (e.g. a bonus protein-shake slot), and
-//   • weekly-cadence items (e.g. "soccer 2x/week") — you can't do them every
-//     day, so they'd wrongly fail most days. Weekly items get their own
-//     display-only progress via weeklyProgress(); they never touch dayState.
-const required = (reqs) => reqs.filter((r) => !r.optional && r.frequency !== 'weekly')
+//   • weekly/monthly-cadence items (e.g. "soccer 2x/week", "massage 1x a
+//     month") — you can't do them every day, so they'd wrongly fail most
+//     days. They get their own display-only progress (weeklyProgress /
+//     monthlyProgress); they never touch dayState.
+const required = (reqs) => reqs.filter((r) => !r.optional && r.frequency !== 'weekly' && r.frequency !== 'monthly')
 
 export function isLogComplete(reqs, log) {
   const must = required(reqs)
@@ -90,6 +101,30 @@ export function weeklyProgress(reqs, logs, { startStr, dayNumber, totalDays }) {
     }
     // Clamp the target so a short final week can't show an unreachable goal.
     const target = Math.max(1, Math.min(r.timesPerWeek || 1, daysInWeek))
+    out[r.id] = { done, target, met: done >= target }
+  }
+  return out
+}
+
+// Monthly cadence, same idea as weeklyProgress but over challenge-relative
+// 30-day blocks (month 1 = days 1-30), so "1× a month" reads consistently no
+// matter what calendar date the challenge started.
+export function monthlyProgress(reqs, logs, { startStr, dayNumber, totalDays }) {
+  const monthly = reqs.filter((r) => r.frequency === 'monthly')
+  if (!monthly.length || dayNumber < 1) return {}
+  const logsByDate = {}
+  for (const l of logs) logsByDate[l.logDate] = l
+  const m = Math.ceil(dayNumber / 30)
+  const first = (m - 1) * 30 + 1
+  const last = totalDays ? Math.min(m * 30, totalDays) : m * 30
+  const daysInMonth = Math.max(1, last - first + 1) // a final partial block can be < 30
+  const out = {}
+  for (const r of monthly) {
+    let done = 0
+    for (let n = first; n <= last; n++) {
+      if (entrySatisfies(r, logsByDate[dayDate(startStr, n)]?.entriesByReq?.[r.id])) done++
+    }
+    const target = Math.max(1, Math.min(r.timesPerMonth || 1, daysInMonth))
     out[r.id] = { done, target, met: done >= target }
   }
   return out

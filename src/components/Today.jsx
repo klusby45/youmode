@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../appContext.js'
 import { isMealReq } from '../config.js'
-import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, weeklyProgress } from '../lib/challenge.js'
+import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, checkCount, weeklyProgress, monthlyProgress } from '../lib/challenge.js'
 import { IS_MOBILE } from '../lib/device.js'
+import { tapHaptic } from '../lib/native.js'
 import * as api from '../data.js'
 import Icon from './Icons.jsx'
 import ProofImage from './ProofImage.jsx'
@@ -86,13 +87,40 @@ export default function Today() {
     }
   }
 
-  async function toggleCheck(req) {
+  // A finished countdown marks its item done (never toggles off).
+  async function completeTimer(req) {
     if (!editable || saving) return
-    const cur = entrySatisfies(req, log?.entriesByReq?.[req.id])
     setSaving(req.id)
     setSaveErr(null)
     try {
-      await actions.setChecked(challenge.id, me.id, cfg.todayStr, req, !cur)
+      await actions.setChecked(challenge.id, me.id, cfg.todayStr, req, true)
+      tapHaptic()
+      await actions.refresh()
+    } catch {
+      setSaveErr(`"${req.label}" didn't save — check your connection and tap it again.`)
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  async function toggleCheck(req) {
+    if (!editable || saving) return
+    const entry = log?.entriesByReq?.[req.id]
+    const target = req.timesPerDay || 1
+    setSaving(req.id)
+    setSaveErr(null)
+    try {
+      if (target > 1) {
+        // Multi-a-day item: each tap logs one more; a tap at the target clears
+        // the day (same rhythm as toggling a plain check off).
+        const cur = checkCount(entry)
+        const next = cur >= target ? 0 : cur + 1
+        await actions.setCheckCount(challenge.id, me.id, cfg.todayStr, req, next)
+      } else {
+        const cur = entrySatisfies(req, entry)
+        await actions.setChecked(challenge.id, me.id, cfg.todayStr, req, !cur)
+      }
+      tapHaptic()
       await actions.refresh()
     } catch {
       setSaveErr(`"${req.label}" didn't save — check your connection and tap it again.`)
@@ -129,13 +157,16 @@ export default function Today() {
   // Extra-meal slots only render once filled; the empty next one is offered
   // via the "+ Add a meal" tile (body-goal users only).
   const isFilled = (r) => { const e = log?.entriesByReq?.[r.id]; return !!(e?.photoPaths?.length || e?.photoPath) }
-  const daily = (r) => r.frequency !== 'weekly'
+  const daily = (r) => r.frequency !== 'weekly' && r.frequency !== 'monthly'
   const photos = reqs.filter((r) => r.kind === 'photo' && daily(r) && (!api.isExtraMeal(r) || isFilled(r)))
   const checks = reqs.filter((r) => r.kind === 'check' && daily(r))
+  const timers = reqs.filter((r) => r.kind === 'timer' && daily(r))
   // Weekly-cadence items live in their own "This week" section — they never
   // gate the day, so they're pulled out of the daily grids above.
   const weekly = reqs.filter((r) => r.frequency === 'weekly' && !api.isExtraMeal(r)).sort((a, b) => a.sort - b.sort)
   const wprog = weeklyProgress(reqs, myLogs, { startStr: cfg.startStr, dayNumber: dayNum, totalDays: myDays })
+  const monthly = reqs.filter((r) => r.frequency === 'monthly' && !api.isExtraMeal(r)).sort((a, b) => a.sort - b.sort)
+  const mprog = monthlyProgress(reqs, myLogs, { startStr: cfg.startStr, dayNumber: dayNum, totalDays: myDays })
   const extraSlots = reqs.filter((r) => api.isExtraMeal(r) && r.kind === 'photo').sort((a, b) => a.sort - b.sort)
   const nextExtra = extraSlots.find((r) => !isFilled(r))
   // Body-goal extras (only for members with a plan): filled meal entries get
@@ -213,26 +244,43 @@ export default function Today() {
             onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} />
         ))}
         {myPlan && editable && nextExtra && (
-          <AddMealSlot uploading={uploading === nextExtra.id} onPick={(f) => onPick(nextExtra, f)} />
+          <AddMealSlot uploading={uploading === nextExtra.id} onPick={(f) => onPick(nextExtra, f)} captureOnly={nextExtra.captureOnly} />
         )}
       </div>
 
       {checks.length > 0 && <div style={{ height: 14 }} />}
       {checks.map((r) => {
-        const on = entrySatisfies(r, log?.entriesByReq?.[r.id])
+        const entry = log?.entriesByReq?.[r.id]
+        const on = entrySatisfies(r, entry)
+        const target = r.timesPerDay || 1
+        const count = checkCount(entry)
         const busy = saving === r.id
         return (
           <button key={r.id} className={'watertoggle' + (on ? ' on' : '')} onClick={() => toggleCheck(r)}
             disabled={!editable || busy} style={{ marginBottom: 8, opacity: busy ? 0.6 : undefined }}>
-            <span className="wt-box" style={on ? { background: 'var(--blue)', borderColor: 'var(--blue)', color: '#fff' } : undefined}>{on && <Icon name="check" size={18} />}</span>
+            <span className="wt-box" style={on ? { background: 'var(--blue)', borderColor: 'var(--blue)', color: '#fff' } : undefined}>
+              {on ? <Icon name="check" size={18} /> : (target > 1 && count > 0 ? <span className="wt-count">{count}</span> : null)}
+            </span>
             <span style={{ flex: 1 }}>
               <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
-              <span className="wt-hint">{busy ? 'Saving…' : on ? `Saved ✓${r.hint ? ' · ' + r.hint : ''}` : (r.hint || 'Just check it')}</span>
+              <span className="wt-hint">
+                {busy ? 'Saving…'
+                  : on ? `Saved ✓${r.hint ? ' · ' + r.hint : ''}`
+                  : target > 1 ? `${count} of ${target} today — tap to log one${r.hint ? ' · ' + r.hint : ''}`
+                  : (r.hint || 'Just check it')}
+              </span>
             </span>
             <Icon name={r.icon || 'bolt'} size={22} style={{ color: on ? 'var(--blue)' : 'var(--muted-2)' }} />
           </button>
         )
       })}
+
+      {timers.length > 0 && <div style={{ height: 6 }} />}
+      {timers.map((r) => (
+        <TimerTile key={r.id} req={r} entry={log?.entriesByReq?.[r.id]} editable={editable}
+          busy={saving === r.id} todayStr={cfg.todayStr}
+          onComplete={() => completeTimer(r)} onClear={() => toggleCheck(r)} />
+      ))}
 
       {weekly.length > 0 && (
         <>
@@ -241,7 +289,7 @@ export default function Today() {
             const wp = wprog[r.id] || { done: 0, target: r.timesPerWeek || 1, met: false }
             const onToday = entrySatisfies(r, log?.entriesByReq?.[r.id])
             const badge = `${wp.done} of ${wp.target} this week`
-            if (r.kind === 'check') {
+            if (r.kind !== 'photo') {
               const busy = saving === r.id
               return (
                 <button key={r.id} className={'watertoggle wk' + (onToday ? ' on' : '') + (wp.met ? ' met' : '')}
@@ -260,6 +308,45 @@ export default function Today() {
                 <div className="wk-row">
                   <span className="wk-title">{r.label}</span>
                   <span className={'wk-badge' + (wp.met ? ' met' : '')}>{badge}</span>
+                </div>
+                <div className="slots-grid">
+                  <PhotoSlot req={r} entry={log?.entriesByReq?.[r.id]} editable={editable}
+                    uploading={uploading === r.id} onPick={(f) => onPick(r, f)} onClear={() => onClearPhotos(r)}
+                    mealMode={!!myPlan && isMealReq(r)}
+                    onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} />
+                </div>
+              </div>
+            )
+          })}
+        </>
+      )}
+
+      {monthly.length > 0 && (
+        <>
+          <div className="section-label" style={{ marginTop: 18 }}>This month</div>
+          {monthly.map((r) => {
+            const mp = mprog[r.id] || { done: 0, target: r.timesPerMonth || 1, met: false }
+            const onToday = entrySatisfies(r, log?.entriesByReq?.[r.id])
+            const badge = `${mp.done} of ${mp.target} this month`
+            if (r.kind !== 'photo') {
+              const busy = saving === r.id
+              return (
+                <button key={r.id} className={'watertoggle wk' + (onToday ? ' on' : '') + (mp.met ? ' met' : '')}
+                  onClick={() => toggleCheck(r)} disabled={!editable || busy} style={{ marginBottom: 8, opacity: busy ? 0.6 : undefined }}>
+                  <span className="wt-box" style={onToday ? { background: 'var(--blue)', borderColor: 'var(--blue)', color: '#fff' } : undefined}>{onToday && <Icon name="check" size={18} />}</span>
+                  <span style={{ flex: 1 }}>
+                    <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
+                    <span className="wt-hint" style={mp.met ? { color: 'var(--green)' } : undefined}>{busy ? 'Saving…' : `${badge}${onToday ? ' · logged today' : ''}`}</span>
+                  </span>
+                  <Icon name={r.icon || 'bolt'} size={22} style={{ color: mp.met ? 'var(--green)' : 'var(--muted-2)' }} />
+                </button>
+              )
+            }
+            return (
+              <div key={r.id} className={'wk-photo' + (mp.met ? ' met' : '')}>
+                <div className="wk-row">
+                  <span className="wk-title">{r.label}</span>
+                  <span className={'wk-badge' + (mp.met ? ' met' : '')}>{badge}</span>
                 </div>
                 <div className="slots-grid">
                   <PhotoSlot req={r} entry={log?.entriesByReq?.[r.id]} editable={editable}
@@ -354,23 +441,96 @@ function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, mealMode,
       ) : (
         <span className="slot-hint">{hint}</span>
       )}
-      {/* Camera capture only on phones/tablets — silently absent on desktop.
-          Value reset lets iOS re-fire the picker for the same file after a retry. */}
-      {(editable && (canAddMore || !req.multi)) && IS_MOBILE && <input type="file" accept="image/*" capture="environment"
+      {/* Photo source honors the item's setting: capture-only forces the live
+          camera (the keep-yourself-honest mode); otherwise iOS offers
+          library/camera/files so screenshots (Oura, watch apps) work too.
+          Value reset lets iOS re-fire the picker for the same file. */}
+      {(editable && (canAddMore || !req.multi)) && IS_MOBILE && <input type="file" accept="image/*"
+        capture={req.captureOnly ? 'environment' : undefined}
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onPick(f) }} />}
     </label>
   )
 }
 
+// Built-in countdown proof (Miska/her sister, 2026-07-18): tap to start,
+// finish the minutes, and the item checks itself — no separate clock app.
+// endsAt persists in localStorage so backgrounding the phone or reopening the
+// app mid-meditation doesn't lose the session; a timer that expired while the
+// app was closed completes on the next mount.
+function TimerTile({ req, entry, editable, busy, todayStr, onComplete, onClear }) {
+  const done = entrySatisfies(req, entry)
+  const target = req.minMinutes || 10
+  const storeKey = `ym-timer-${req.id}-${todayStr}`
+  const [endsAt, setEndsAt] = useState(() => {
+    const v = Number(localStorage.getItem(storeKey))
+    return v > Date.now() ? v : (v ? -1 : null) // -1 = expired while away
+  })
+  const [now, setNow] = useState(Date.now())
+  const firedRef = useRef(false)
+
+  const running = !done && endsAt && endsAt > now
+  useEffect(() => {
+    if (!running) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [running])
+
+  // Completion: countdown hit zero (or had already expired while away).
+  useEffect(() => {
+    const expired = endsAt === -1 || (endsAt && endsAt > 0 && now >= endsAt)
+    if (done || !expired || firedRef.current) return
+    firedRef.current = true
+    localStorage.removeItem(storeKey)
+    setEndsAt(null)
+    onComplete()
+  }, [now, endsAt, done, storeKey, onComplete])
+
+  const start = () => {
+    const ends = Date.now() + target * 60000
+    try { localStorage.setItem(storeKey, String(ends)) } catch { /* private mode */ }
+    firedRef.current = false
+    setEndsAt(ends)
+    setNow(Date.now())
+  }
+  const cancel = () => {
+    localStorage.removeItem(storeKey)
+    setEndsAt(null)
+  }
+
+  const left = running ? Math.max(0, endsAt - now) : 0
+  const mmss = `${Math.floor(left / 60000)}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')}`
+
+  return (
+    <button className={'watertoggle' + (done ? ' on' : '')} disabled={!editable || busy}
+      onClick={done ? onClear : running ? cancel : start}
+      style={{ marginBottom: 8, opacity: busy ? 0.6 : undefined }}>
+      <span className="wt-box" style={done ? { background: 'var(--blue)', borderColor: 'var(--blue)', color: '#fff' } : undefined}>
+        {done ? <Icon name="check" size={18} /> : running ? null : <Icon name="clock" size={16} />}
+        {running && <span className="wt-count" style={{ fontSize: 10 }}>{mmss}</span>}
+      </span>
+      <span style={{ flex: 1 }}>
+        <span className="wt-title" style={{ display: 'block' }}>{req.label}</span>
+        <span className="wt-hint" style={running ? { color: 'var(--blue)' } : undefined}>
+          {busy ? 'Saving…'
+            : done ? `Done ✓ · ${target} min in the books`
+            : running ? `${mmss} to go — stay with it (tap to cancel)`
+            : `${target} min — tap to start the timer`}
+        </span>
+      </span>
+      <Icon name={req.icon || 'clock'} size={22} style={{ color: done ? 'var(--blue)' : running ? 'var(--blue)' : 'var(--muted-2)' }} />
+    </button>
+  )
+}
+
 // Ad-hoc extra meal: a dashed "+" tile that shoots straight into the next
 // free extra slot; the resulting tile is captioned like any meal.
-function AddMealSlot({ uploading, onPick }) {
+function AddMealSlot({ uploading, onPick, captureOnly }) {
   return (
     <label className={'slot add-meal' + (uploading ? ' uploading' : '')}>
       <span className="slot-ic"><Icon name="plus" size={24} strokeWidth={2.2} /></span>
       <span className="slot-label">Add a meal</span>
       <span className="slot-hint">{uploading ? 'Uploading…' : 'optional · counts toward your goal'}</span>
-      {IS_MOBILE && <input type="file" accept="image/*" capture="environment"
+      {IS_MOBILE && <input type="file" accept="image/*" capture={captureOnly ? 'environment' : undefined}
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onPick(f) }} />}
     </label>
   )

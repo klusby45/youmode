@@ -10,7 +10,7 @@ import { ModeCards } from './PostCreateSteps.jsx'
 export default function YouSheet({
   theme, onPickTheme, tone, onPickTone,
   sharing, onPickSharing, photoReqs = [], onToggleReq, showPrivacy = true,
-  email, onSaveEmail, onDeleteAccount, onClose,
+  email, onSaveEmail, onDeleteAccount, onEditChecklist, onNewChallenge, onClose,
 }) {
   return (
     <Sheet onClose={onClose}>
@@ -38,6 +38,32 @@ export default function YouSheet({
           {v.key === tone && <span className="to-check"><Icon name="check" size={18} /></span>}
         </button>
       ))}
+
+      {onEditChecklist && (
+        <>
+          <div className="section-label">Checklist</div>
+          <button className="theme-opt" onClick={onEditChecklist}>
+            <span className="to-label">
+              Edit my checklist
+              <small>Add, remove, or change items — by hand or by telling the guide</small>
+            </span>
+            <Icon name="edit" size={16} />
+          </button>
+        </>
+      )}
+
+      {onNewChallenge && (
+        <>
+          <div className="section-label">Challenges</div>
+          <button className="theme-opt" onClick={onNewChallenge}>
+            <span className="to-label">
+              Start a new challenge
+              <small>Build another one — talk it out or set it up yourself. This one stays; switch between them up top.</small>
+            </span>
+            <Icon name="plus" size={16} />
+          </button>
+        </>
+      )}
 
       {showPrivacy && (
         <PrivacySection sharing={sharing} onPickSharing={onPickSharing}

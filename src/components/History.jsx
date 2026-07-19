@@ -12,11 +12,9 @@ export default function History() {
 
   return (
     <div>
+      {/* No title — the History tab is the title (Miska). One hint line only. */}
       <div className="screen-head">
-        <div>
-          <div className="screen-title">{t('history.title')}</div>
-          <div className="screen-sub">tap a day to see the proof</div>
-        </div>
+        <div className="screen-sub">Tap a day to see the details.</div>
       </div>
 
       {participants.map((p) => {

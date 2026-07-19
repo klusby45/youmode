@@ -24,6 +24,9 @@ How to behave:
 What this app can actually track:
 - A checklist of things they prove they did. Each item is either PHOTO PROOF or a SIMPLE CHECK. Photo items may carry a minimum-minutes value certified from timestamp screenshots (e.g. a 45-minute workout).
 - Each item runs at one of two cadences. DAILY items are the promise every single day (miss one and that day is incomplete). WEEKLY items have a per-week target (e.g. "play soccer 2 times a week") and never fail a day. This matters: never force an inherently-weekly activity into a daily item, or the member fails most days for no reason. A sport, a long run, a class a couple times a week, meal prep on Sundays: those are WEEKLY. Daily habits (workout, water, reading, a daily meal photo) stay DAILY.
+- A DAILY check item can also need multiple completions in one day via times_per_day (e.g. "meditate morning and night" = one item, times_per_day 2). Use it when the member says twice a day, AM and PM, with every meal, etc. Photo items never get times_per_day; make separate items instead (e.g. "Morning walk photo" and "Evening walk photo").
+- MONTHLY cadence exists too (times_per_month, e.g. "get a massage once a month", "one long hike a month"). Like weekly, monthly items never fail a day.
+- TIMER items run a built-in countdown in the app and check themselves when it completes. Use kind timer (with min_minutes) for anything defined by minutes of doing: meditate 10 minutes, stretch 15, read 20 minutes, focused deep work. If the member frames it by amount instead (10 pages), a check is better.
 - If a goal's cadence is genuinely unclear ("I want to run"), ask once: "every day, or a few times a week?" Do not guess when it materially changes the plan.
 - A format: solo (just them), versus (head-to-head with one friend), accountability (partners, different goals), or community (a small crew each on their own checklist).
 
@@ -61,15 +64,17 @@ const TOOL = {
           required: ['label', 'kind'],
           properties: {
             label: { type: 'string', description: 'Short imperative, <=40 chars, e.g. "45-min workout", "Read 10 pages".' },
-            kind: { type: 'string', enum: ['photo', 'check'], description: 'photo = needs a proof photo (workouts, meals, progress); check = simple honor-system tick (reading, water).' },
-            frequency: { type: 'string', enum: ['daily', 'weekly'], description: 'daily = every single day (default); weekly = a per-week target that never fails a day. Use weekly for sports, classes, or anything done a few times a week.' },
+            kind: { type: 'string', enum: ['photo', 'check', 'timer'], description: 'photo = needs a proof photo (workouts, meals, progress); check = simple honor-system tick (reading, water); timer = a built-in countdown the member runs in-app, auto-checks when it finishes (meditation, stretching, focused work).' },
+            frequency: { type: 'string', enum: ['daily', 'weekly', 'monthly'], description: 'daily = every single day (default); weekly = a per-week target that never fails a day (sports, classes); monthly = a per-month target (a massage, a deep clean, a long hike).' },
             times_per_week: { type: 'integer', description: 'WEEKLY items only: how many times per week, 1 to 6 (e.g. 2 for "soccer twice a week").' },
+            times_per_month: { type: 'integer', description: 'MONTHLY items only: how many times per month, 1 to 10 (e.g. 1 for "massage once a month").' },
+            times_per_day: { type: 'integer', description: 'DAILY check items only: completions needed per day, 2 to 6 (e.g. 2 for "meditate morning and night"). Omit for once a day. Never on photo items — split those into two items instead.' },
             hint: { type: 'string', description: 'Optional one-line detail, <=60 chars.' },
             icon: {
               type: 'string', enum: ['dumbbell', 'run', 'plate', 'camera', 'book', 'drop', 'target', 'bolt', 'clock', 'trophy'],
               description: 'Optional icon that fits the item.',
             },
-            min_minutes: { type: 'integer', description: 'Optional, PHOTO items only: minimum total minutes to certify from timestamp screenshots (e.g. 45 for a workout).' },
+            min_minutes: { type: 'integer', description: 'PHOTO items: optional minimum minutes to certify from timestamp screenshots (e.g. 45 for a workout). TIMER items: the countdown length in minutes (e.g. 10 for "meditate 10 minutes") — required, defaults to 10.' },
           },
         },
       },
@@ -134,7 +139,7 @@ function validateProposal(input, today) {
   const format = FORMATS.includes(input.format) ? input.format : 'solo'
   const dayCount = Number.isFinite(+input.day_count) ? Math.round(clamp(input.day_count, 7, 365)) : 75
   const items = (Array.isArray(input.items) ? input.items : []).slice(0, 12).map((it) => {
-    const kind = it.kind === 'check' ? 'check' : 'photo'
+    const kind = it.kind === 'check' ? 'check' : it.kind === 'timer' ? 'timer' : 'photo'
     const label = String(it.label || '').trim().slice(0, 60)
     const icon = ICONS.includes(it.icon) ? it.icon : (kind === 'photo' ? 'camera' : 'bolt')
     // Food photos land in the "Fuel" group so the body-plan macro bar counts
@@ -142,13 +147,21 @@ function validateProposal(input, today) {
     const group = kind === 'photo' && isMealish(label) ? 'Fuel' : 'Custom'
     const row = { label, kind, hint: it.hint ? String(it.hint).slice(0, 80) : '', icon, group }
     if (kind === 'photo' && it.min_minutes) row.minMinutes = Math.round(clamp(it.min_minutes, 1, 600))
+    if (kind === 'timer') row.minMinutes = Math.round(clamp(it.min_minutes || 10, 1, 180))
     // Weekly cadence: only a valid weekly item carries a per-week target; a
     // check is fine weekly too. Anything else stays daily.
     if (it.frequency === 'weekly') {
       row.frequency = 'weekly'
       row.timesPerWeek = Math.round(clamp(it.times_per_week || 2, 1, 6))
+    } else if (it.frequency === 'monthly') {
+      row.frequency = 'monthly'
+      row.timesPerMonth = Math.round(clamp(it.times_per_month || 1, 1, 10))
     } else {
       row.frequency = 'daily'
+      // Multi-a-day only makes sense for daily check items (AM/PM habits).
+      if (kind === 'check' && Number(it.times_per_day) > 1) {
+        row.timesPerDay = Math.round(clamp(it.times_per_day, 2, 6))
+      }
     }
     return row
   }).filter((it) => it.label)
@@ -198,34 +211,70 @@ export default async (req) => {
     }
 
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date())
-    const aRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
-      body: JSON.stringify({
-        model: 'claude-sonnet-5',
-        max_tokens: 1500,
-        system: `${SYSTEM}\n\nToday's date: ${today}.`,
-        tools: [TOOL],
-        messages: clean,
-      }),
-    })
-    if (!aRes.ok) {
-      const detail = await aRes.text()
-      console.error('anthropic error', aRes.status, detail.slice(0, 300))
-      return Response.json({ reply: "I'm having trouble thinking right now. Try again in a minute.", proposal: null }, { headers: H })
-    }
-    const ai = await aRes.json()
-    if (ai.stop_reason === 'refusal') {
-      return Response.json({ reply: "I can't help build that one. Tell me a habit or goal you want to stay accountable to and I'll set it up.", proposal: null }, { headers: H })
-    }
-    const reply = (ai.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim()
-    const toolUse = (ai.content || []).find((b) => b.type === 'tool_use' && b.name === 'propose_challenge')
-    const proposal = toolUse ? validateProposal(toolUse.input, today) : null
 
-    return Response.json({
-      reply: reply || (proposal ? "Here's a challenge to start with. Review it and change anything that's not quite right." : '…'),
-      proposal,
-    }, { headers: H })
+    // A deep ramble can take the model 20-40s — longer than the gateway will
+    // hold a silent synchronous response (Mayssa hit that wall: her "build my
+    // plan" died as a timeout → "Couldn't reach the setup guide"). So stream:
+    // newline heartbeats keep bytes flowing while the model works, then the
+    // JSON body lands as the final chunk. Leading newlines are legal JSON
+    // whitespace, so the client's existing res.json() parses it unchanged.
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        const beat = setInterval(() => {
+          try { controller.enqueue(encoder.encode('\n')) } catch { clearInterval(beat) }
+        }, 900)
+        const send = (obj) => {
+          clearInterval(beat)
+          try { controller.enqueue(encoder.encode(JSON.stringify(obj))); controller.close() } catch { /* client gone */ }
+        }
+        ;(async () => {
+          try {
+            const aRes = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
+              body: JSON.stringify({
+                model: 'claude-sonnet-5',
+                // Generous ceiling: a deep ramble can spend a lot of tokens on
+                // internal reasoning BEFORE the visible reply + tool JSON. 1500
+                // was enough to exhaust silently (the old '…' bug).
+                max_tokens: 4000,
+                system: `${SYSTEM}\n\nToday's date: ${today}.`,
+                tools: [TOOL],
+                messages: clean,
+              }),
+            })
+            if (!aRes.ok) {
+              console.error('anthropic error', aRes.status, (await aRes.text()).slice(0, 300))
+              return send({ reply: "I'm having trouble thinking right now. Try again in a minute.", proposal: null })
+            }
+            const ai = await aRes.json()
+            if (ai.stop_reason === 'refusal') {
+              return send({ reply: "I can't help build that one. Tell me a habit or goal you want to stay accountable to and I'll set it up.", proposal: null })
+            }
+            const reply = (ai.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim()
+            const toolUse = (ai.content || []).find((b) => b.type === 'tool_use' && b.name === 'propose_challenge')
+            const proposal = toolUse ? validateProposal(toolUse.input, today) : null
+
+            // Never go silent: no text + no tool call (e.g. the whole budget
+            // went to reasoning) still gets a human, actionable reply.
+            if (!reply && !proposal) {
+              console.error('empty response', ai.stop_reason, JSON.stringify(ai.usage || {}))
+              return send({ reply: "Got all of that — what a picture. Say \"build it\" and I'll turn it into your challenge.", proposal: null })
+            }
+
+            send({
+              reply: reply || "Here's a challenge to start with. Review it and change anything that's not quite right.",
+              proposal,
+            })
+          } catch (e) {
+            console.error('onboard-coach stream error', String(e?.message || e))
+            send({ reply: 'Something went sideways. Try again.', proposal: null })
+          }
+        })()
+      },
+    })
+    return new Response(stream, { headers: H })
   } catch (e) {
     return Response.json({ reply: 'Something went sideways. Try again.', proposal: null, error: String(e?.message || e) }, { status: 200, headers: H })
   }

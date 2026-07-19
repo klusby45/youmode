@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { useApp } from '../appContext.js'
 import Icon from './Icons.jsx'
+import { celebrateHaptic } from '../lib/native.js'
 
 // The daily payoff: a full-screen, screenshot-worthy moment when the last item
 // of the day lands. One component, two personalities — the title renders in
@@ -8,6 +10,7 @@ import Icon from './Icons.jsx'
 // the transition + localStorage); tap anywhere or Done to dismiss.
 export default function DayComplete({ dayNum, streak, name, onClose }) {
   const { t } = useApp()
+  useEffect(() => { celebrateHaptic() }, []) // physical win on the phone
   return (
     <div className="dc-overlay" onClick={onClose} role="dialog" aria-label="Day complete">
       <div className="dc-burst" aria-hidden="true"><i /><i /><i /><i /><i /><i /></div>

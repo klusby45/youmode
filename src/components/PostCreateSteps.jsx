@@ -37,7 +37,7 @@ export function ColorwayVoiceStep({
   return (
     <>
       <div className="screen-title">Make it yours.</div>
-      <p className="muted onb-sub-lg">How it looks, how it talks to you. Change anytime from your avatar.</p>
+      <p className="muted onb-sub-lg">Choose how it looks and how it talks to you. You can change this any time.</p>
       <div className="section-label" style={{ marginTop: 16 }}>Mode</div>
       <ModeCards theme={theme} pickTheme={pickTheme} />
       <div className="section-label">Voice</div>
