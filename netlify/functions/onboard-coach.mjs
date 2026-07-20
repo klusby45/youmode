@@ -26,7 +26,7 @@ What this app can actually track:
 - Each item runs at one of two cadences. DAILY items are the promise every single day (miss one and that day is incomplete). WEEKLY items have a per-week target (e.g. "play soccer 2 times a week") and never fail a day. This matters: never force an inherently-weekly activity into a daily item, or the member fails most days for no reason. A sport, a long run, a class a couple times a week, meal prep on Sundays: those are WEEKLY. Daily habits (workout, water, reading, a daily meal photo) stay DAILY.
 - A DAILY check item can also need multiple completions in one day via times_per_day (e.g. "meditate morning and night" = one item, times_per_day 2). Use it when the member says twice a day, AM and PM, with every meal, etc. Photo items never get times_per_day; make separate items instead (e.g. "Morning walk photo" and "Evening walk photo").
 - MONTHLY cadence exists too (times_per_month, e.g. "get a massage once a month", "one long hike a month"). Like weekly, monthly items never fail a day.
-- TIMER items run a built-in countdown in the app and check themselves when it completes. Use kind timer (with min_minutes) for anything defined by minutes of doing: meditate 10 minutes, stretch 15, read 20 minutes, focused deep work. If the member frames it by amount instead (10 pages), a check is better.
+- TIMER items run a built-in countdown in the app and check themselves when it completes. Use kind timer (with min_minutes) for anything defined by minutes of doing: meditate 10 minutes, stretch 15, read 20 minutes, focused deep work. If the member frames it by amount instead (10 pages), a check is better. Never put a timer on something you consume or photograph rather than spend minutes doing: a meal, a gallon of water, a progress photo, a weigh-in are photo or check, never timer.
 - If a goal's cadence is genuinely unclear ("I want to run"), ask once: "every day, or a few times a week?" Do not guess when it materially changes the plan.
 - A format: solo (just them), versus (head-to-head with one friend), accountability (partners, different goals), or community (a small crew each on their own checklist).
 
@@ -106,6 +106,10 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number(v)))
 // its group is "Fuel". Tag food-ish photos so the body-plan macro bar can count
 // them; mirrors the client's isMealReq label heuristic.
 const isMealish = (label) => /\b(meal|breakfast|lunch|dinner|snack|shake|food|eat)\b/i.test(label || '')
+// A timer only fits things you DO for minutes, never things you consume or
+// photograph. Mirrors src/config.js timerAllowed so the AI can't propose a
+// timer on a meal, water, a progress pic, or a weigh-in.
+const timerFits = (label) => !/\b(meal|meals|breakfast|lunch|dinner|snack|snacks|eat|eating|ate|food|diet|macro|macros|protein|calorie|calories|water|gallon|gallons|hydrate|hydration|oz|ounce|ounces|drink|drinks|shake|smoothie|photo|photos|pic|pics|picture|selfie|mirror|weigh|weight|scale|bodyweight|supplement|vitamin|vitamins|creatine|pill|pills)\b/i.test(label || '')
 
 // Reuse goal-coach's clamps verbatim so a body_plan built here is byte-identical
 // to one from the Goal Coach: the same safety envelope, the same client shape.
@@ -139,8 +143,11 @@ function validateProposal(input, today) {
   const format = FORMATS.includes(input.format) ? input.format : 'solo'
   const dayCount = Number.isFinite(+input.day_count) ? Math.round(clamp(input.day_count, 7, 365)) : 75
   const items = (Array.isArray(input.items) ? input.items : []).slice(0, 12).map((it) => {
-    const kind = it.kind === 'check' ? 'check' : it.kind === 'timer' ? 'timer' : 'photo'
     const label = String(it.label || '').trim().slice(0, 60)
+    // Demote a timer the model wrongly put on a meal/water/photo/weigh-in: a
+    // meal becomes photo proof (so macros still count), everything else a check.
+    let kind = it.kind === 'check' ? 'check' : it.kind === 'timer' ? 'timer' : 'photo'
+    if (kind === 'timer' && !timerFits(label)) kind = isMealish(label) ? 'photo' : 'check'
     const icon = ICONS.includes(it.icon) ? it.icon : (kind === 'photo' ? 'camera' : 'bolt')
     // Food photos land in the "Fuel" group so the body-plan macro bar counts
     // them; everything else is "Custom".

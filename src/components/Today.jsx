@@ -396,7 +396,7 @@ export default function Today() {
   )
 }
 
-function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, mealMode, onCaption }) {
+export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, mealMode, onCaption }) {
   const paths = entry?.photoPaths?.length ? entry.photoPaths : (entry?.photoPath ? [entry.photoPath] : [])
   const filled = paths.length > 0
   const flagged = entry?.aiFlag && !entry.aiDismissed
@@ -524,7 +524,7 @@ function TimerTile({ req, entry, editable, busy, todayStr, onComplete, onClear }
 
 // Ad-hoc extra meal: a dashed "+" tile that shoots straight into the next
 // free extra slot; the resulting tile is captioned like any meal.
-function AddMealSlot({ uploading, onPick, captureOnly }) {
+export function AddMealSlot({ uploading, onPick, captureOnly }) {
   return (
     <label className={'slot add-meal' + (uploading ? ' uploading' : '')}>
       <span className="slot-ic"><Icon name="plus" size={24} strokeWidth={2.2} /></span>
@@ -593,7 +593,7 @@ function MacroRow({ label, value, unit, target, max }) {
 
 // One-line meal description, edited in a small sheet; the AI reads photo +
 // caption to estimate macros, which render on the tile itself.
-function CaptionSheet({ req, entry, onSave, onClose }) {
+export function CaptionSheet({ req, entry, onSave, onClose }) {
   const [text, setText] = useState(entry?.caption || '')
   const [busy, setBusy] = useState(false)
   const submit = () => { if (text.trim() && !busy) { setBusy(true); onSave(text) } }

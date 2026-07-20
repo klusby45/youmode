@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useApp } from '../appContext.js'
-import { dayDate } from '../lib/challenge.js'
+import { dayDate, currentDayNumber } from '../lib/challenge.js'
 import DayProof from './DayProof.jsx'
 import Sheet from './Sheet.jsx'
 import Icon from './Icons.jsx'
 
 export default function History() {
-  const { participants, summaries, cfg, reqsFor, daysFor, me, myMember, isReferee, actions, t } = useApp()
+  const { participants, summaries, cfg, reqsFor, logsFor, daysFor, me, myMember, isReferee, actions, t } = useApp()
+  const dayNum = currentDayNumber(cfg.startStr, cfg.todayStr)
   const [sel, setSel] = useState(null) // { p, n, date, log }
   const [extending, setExtending] = useState(false)
 
@@ -34,9 +35,12 @@ export default function History() {
                 const state = s.states[n]
                 const log = s.logsByDate[date]
                 const isToday = date === cfg.todayStr
+                // My own past/today cells are always openable (even with no log)
+                // so I can backfill a meal I logged late; others' need a log.
+                const openable = log || (mine && n <= dayNum && n >= 1)
                 return (
                   <button key={n} className={`cal-cell ${state}${log ? ' has' : ''}${isToday ? ' today' : ''}`}
-                    onClick={() => log && setSel({ p, n, date, log })} title={`Day ${n} · ${date}`}>
+                    onClick={() => openable && setSel({ p, n, date, log })} title={`Day ${n} · ${date}`}>
                     {n}
                   </button>
                 )
@@ -63,7 +67,10 @@ export default function History() {
 
       {sel && (
         <DayProof profile={sel.p} reqs={reqsFor(sel.p.userId)} dayNumber={sel.n} date={sel.date}
-          log={sel.log} cfg={cfg} totalDays={daysFor(sel.p.userId)} onClose={() => setSel(null)} />
+          // Live log (not the tap-time snapshot) so a meal backfilled in the
+          // sheet re-renders its macros immediately.
+          log={logsFor(sel.p.userId).find((l) => l.logDate === sel.date) || sel.log}
+          cfg={cfg} totalDays={daysFor(sel.p.userId)} onClose={() => setSel(null)} />
       )}
       {extending && (
         <AddDays current={daysFor(me.id)} memberId={myMember.id} cfg={cfg} t={t}

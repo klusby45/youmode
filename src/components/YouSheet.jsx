@@ -14,54 +14,34 @@ export default function YouSheet({
 }) {
   return (
     <Sheet onClose={onClose}>
-      <div className="screen-title" style={{ fontSize: 20, marginBottom: 4 }}>You</div>
-      <p className="muted" style={{ fontSize: 12, margin: '0 0 14px' }}>
-        Your picks, your eyes only — everyone chooses their own.
-      </p>
+      <div className="screen-title" style={{ fontSize: 20, marginBottom: 14 }}>Settings</div>
 
-      <div className="section-label" style={{ marginTop: 0 }}>Mode</div>
-      <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
-        Two looks, one challenge. Change anytime.
-      </p>
+      <div className="set-label"><Icon name="expand" size={13} />Look</div>
       <ModeCards theme={theme} pickTheme={onPickTheme} />
 
-      <div className="section-label">Voice</div>
-      <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
-        How the app talks to you — from gentle to no-excuses.
-      </p>
+      <div className="set-label"><Icon name="mic" size={13} />Voice</div>
       {VOICES.map((v) => (
         <button key={v.key} className={'theme-opt voice-opt' + (v.key === tone ? ' active' : '')} onClick={() => onPickTone(v.key)}>
-          <span className="to-label">
-            {v.label}
-            <small>{v.preview}</small>
-          </span>
+          <span className="to-label">{v.label}<small>{v.preview}</small></span>
           {v.key === tone && <span className="to-check"><Icon name="check" size={18} /></span>}
         </button>
       ))}
 
-      {onEditChecklist && (
+      {(onEditChecklist || onNewChallenge) && (
         <>
-          <div className="section-label">Checklist</div>
-          <button className="theme-opt" onClick={onEditChecklist}>
-            <span className="to-label">
-              Edit my checklist
-              <small>Add, remove, or change items — by hand or by telling the guide</small>
-            </span>
-            <Icon name="edit" size={16} />
-          </button>
-        </>
-      )}
-
-      {onNewChallenge && (
-        <>
-          <div className="section-label">Challenges</div>
-          <button className="theme-opt" onClick={onNewChallenge}>
-            <span className="to-label">
-              Start a new challenge
-              <small>Build another one — talk it out or set it up yourself. This one stays; switch between them up top.</small>
-            </span>
-            <Icon name="plus" size={16} />
-          </button>
+          <div className="set-label"><Icon name="today" size={13} />Challenge</div>
+          {onEditChecklist && (
+            <button className="theme-opt set-action" onClick={onEditChecklist}>
+              <Icon name="edit" size={17} /><span className="to-label">Edit my checklist</span>
+              <Icon name="chevron" size={15} className="set-chev" />
+            </button>
+          )}
+          {onNewChallenge && (
+            <button className="theme-opt set-action" onClick={onNewChallenge}>
+              <Icon name="plus" size={17} /><span className="to-label">Start a new challenge</span>
+              <Icon name="chevron" size={15} className="set-chev" />
+            </button>
+          )}
         </>
       )}
 
@@ -94,10 +74,8 @@ function RecoveryEmail({ email, onSave }) {
   }
   return (
     <>
-      <div className="section-label">Recovery email</div>
-      <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
-        Where we send a reset link if you forget your password. Private, never shared.
-      </p>
+      <div className="set-label"><Icon name="upload" size={13} />Recovery email</div>
+      <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>For a password reset. Never shared.</p>
       <div className="row-split" style={{ gap: 8 }}>
         <input className="fr-input" style={{ flex: 1 }} type="email" inputMode="email" autoCapitalize="none"
           value={val} placeholder="you@example.com" onChange={(e) => { setVal(e.target.value); setMsg(null) }} />
@@ -116,11 +94,10 @@ function DeleteAccount({ onDelete }) {
   const [err, setErr] = useState(null)
   return (
     <>
-      <div className="section-label">Account</div>
+      <div className="set-label"><Icon name="logout" size={13} />Account</div>
       {!confirming ? (
-        <button className="theme-opt danger-opt" onClick={() => setConfirming(true)}>
-          <span className="to-label">Delete account</span>
-          <Icon name="x" size={16} />
+        <button className="theme-opt danger-opt set-action" onClick={() => setConfirming(true)}>
+          <Icon name="x" size={17} /><span className="to-label">Delete account</span>
         </button>
       ) : (
         <div className="danger-confirm">
@@ -158,25 +135,19 @@ function PrivacySection({ sharing, onPickSharing, photoReqs, onToggleReq }) {
 
   return (
     <>
-      <div className="section-label">Proof photos</div>
-      <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
-        Who sees your actual photos when they open your day. Your referee always sees them.
-      </p>
-      <button className={'theme-opt priv-opt' + (cur === 'icons' ? ' active' : '')} onClick={() => onPickSharing('icons')}>
-        <span className="to-label">Icons only<small>Others see your progress icons + captions, not the photos</small></span>
+      <div className="set-label"><Icon name="camera" size={13} />Who sees my photos</div>
+      <button className={'theme-opt priv-opt set-action' + (cur === 'icons' ? ' active' : '')} onClick={() => onPickSharing('icons')}>
+        <Icon name="target" size={17} /><span className="to-label">Just me</span>
         {cur === 'icons' && <span className="to-check"><Icon name="check" size={18} /></span>}
       </button>
-      <button className={'theme-opt priv-opt' + (cur === 'all' ? ' active' : '')} onClick={() => onPickSharing('all')}>
-        <span className="to-label">Everyone in your challenges<small>Challenge-mates can open your proof photos</small></span>
+      <button className={'theme-opt priv-opt set-action' + (cur === 'all' ? ' active' : '')} onClick={() => onPickSharing('all')}>
+        <Icon name="grid" size={17} /><span className="to-label">My challenge</span>
         {cur === 'all' && <span className="to-check"><Icon name="check" size={18} /></span>}
       </button>
 
       {cur === 'all' && photoReqs.length > 0 && (
         <>
-          <div className="section-label">Keep private</div>
-          <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
-            Lock any item to keep it icon + caption only — like a progress photo.
-          </p>
+          <div className="set-label"><Icon name="minus" size={13} />Keep some private</div>
           {photoReqs.map((r) => {
             const on = isLocked(r)
             return (

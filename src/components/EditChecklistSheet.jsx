@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Sheet from './Sheet.jsx'
 import Icon from './Icons.jsx'
 import ItemRowEditor from './ItemRowEditor.jsx'
+import MicButton from './MicButton.jsx'
 import { slugify } from '../config.js'
 import * as api from '../data.js'
 
@@ -88,30 +89,25 @@ export default function EditChecklistSheet({ reqs, onSave, onClose }) {
 
   return (
     <Sheet onClose={onClose}>
-      <div className="screen-title" style={{ fontSize: 20, marginBottom: 4 }}>Your checklist</div>
-      <p className="muted" style={{ fontSize: 12, margin: '0 0 14px' }}>
-        Changes apply from today forward. Removing an item deletes its logged history.
-      </p>
+      <div className="screen-title" style={{ fontSize: 20, marginBottom: 10 }}>Your checklist</div>
       {items.map((it, i) => (
         <ItemRowEditor key={it.id || 'new-' + i} it={it}
           onChange={(patch) => updateItem(i, patch)}
           onRemove={() => removeItem(i)} />
       ))}
-      <div className="row-split" style={{ marginTop: 4 }}>
-        <button className="btn btn-sm" onClick={() => addItem('photo')}><Icon name="camera" size={14} />Add photo item</button>
-        <button className="btn btn-sm" onClick={() => addItem('check')}><Icon name="check" size={14} />Add checkmark</button>
-        <button className="btn btn-sm" onClick={() => addItem('timer')}><Icon name="clock" size={14} />Add timer</button>
+      <div className="add-row">
+        <button className="btn btn-sm" onClick={() => addItem('photo')}><Icon name="camera" size={14} />Photo</button>
+        <button className="btn btn-sm" onClick={() => addItem('check')}><Icon name="check" size={14} />Check</button>
+        <button className="btn btn-sm" onClick={() => addItem('timer')}><Icon name="clock" size={14} />Timer</button>
       </div>
 
-      <div className="section-label" style={{ marginTop: 16 }}>Or just tell the guide</div>
-      <p className="muted" style={{ fontSize: 12, margin: '0 0 8px' }}>
-        Describe the change in your own words and it updates the list above for you to review.
-      </p>
-      <div className="field">
-        <textarea value={aiText} rows={2} placeholder={'e.g. "make reading a timer instead" or "add stretching every morning"'}
+      <div className="section-label" style={{ marginTop: 18 }}>Or just say it</div>
+      <div className="guide-box">
+        <textarea value={aiText} rows={2} placeholder={'e.g. "make reading a 15 minute timer"'}
           disabled={aiBusy} onChange={(e) => setAiText(e.target.value)} />
+        <MicButton onText={(txt) => setAiText((v) => (v ? v.trim() + ' ' : '') + txt)} disabled={aiBusy} />
       </div>
-      {aiNote && <p className="muted" style={{ fontSize: 12, margin: '2px 2px 8px' }}>{aiNote}</p>}
+      {aiNote && <p className="muted" style={{ fontSize: 12, margin: '6px 2px' }}>{aiNote}</p>}
       <button className="btn btn-sm" disabled={aiBusy || !aiText.trim()} onClick={askGuide}>
         <Icon name="sparkle" size={14} />{aiBusy ? 'Thinking…' : 'Update my list'}
       </button>

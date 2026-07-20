@@ -615,6 +615,18 @@ export async function saveCaption(entryId, caption) {
   if (error) throw error
 }
 
+// Backfill a meal by description on ANY day (no photo needed) — for logging a
+// meal you didn't get to enter until later (a late dinner past midnight).
+// Ensures the day + entry exist, sets the caption, clears the stale estimate,
+// and returns the entry so the caller can re-score it. RLS is ownership-only,
+// so past days are writable; only the client's day-lock forbids it on Today.
+export async function logMealCaption(challengeId, userId, logDate, req, caption) {
+  const dl = await ensureDayLog(challengeId, userId, logDate)
+  return upsertEntry(dl.id, req, userId, {
+    caption: caption?.trim() || null, est_protein: null, est_calories: null,
+  })
+}
+
 export async function addWeighIn(userId, date, weight) {
   const { error } = await supabase.from('weigh_ins')
     .upsert({ user_id: userId, weigh_date: date, weight }, { onConflict: 'user_id,weigh_date' })

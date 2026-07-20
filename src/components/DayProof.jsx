@@ -8,6 +8,7 @@ import Icon from './Icons.jsx'
 import ProofImage from './ProofImage.jsx'
 import Sheet from './Sheet.jsx'
 import Lightbox from './Lightbox.jsx'
+import { PhotoSlot, AddMealSlot, CaptionSheet } from './Today.jsx'
 
 // Chip class/icon fixed; labels follow the viewer's voice.
 const stateChip = (t) => ({
@@ -21,8 +22,11 @@ const stateChip = (t) => ({
 // Read-only detail of one member's day: photos (tap to zoom), checks, AI
 // flags, verdict. Rendered as a swipe-dismissable bottom sheet.
 export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, totalDays, onClose }) {
-  const { isReferee, plans, t, me } = useApp()
+  const { isReferee, plans, t, me, actions, challenge } = useApp()
   const [zoom, setZoom] = useState(null) // { path, label }
+  const [uploading, setUploading] = useState(null) // req id of an in-flight meal photo
+  const [captioning, setCaptioning] = useState(null) // { req, entry } meal being described
+  const [saveErr, setSaveErr] = useState(null)
   // Photo privacy: per-requirement check against the day owner's sharing
   // setting. Referee and the owner themselves always pass.
   const seePhotos = (r) => canSeePhotos({
@@ -42,12 +46,38 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
   const total = logTotal(reqs)
   const done = logDone(reqs, log)
   const extraFilled = (r) => { const e = log?.entriesByReq?.[r.id]; return !!(e?.photoPaths?.length || e?.photoPath) }
-  const photos = reqs.filter((r) => r.kind === 'photo' && (!isExtraMeal(r) || extraFilled(r)))
+  const extraUsed = (r) => { const e = log?.entriesByReq?.[r.id]; return !!(e?.photoPaths?.length || e?.photoPath || e?.caption) }
+  const plan = plans?.find((p) => p.userId === profile.userId)
+  // Backfill: the owner, on their own day, with a body plan, can add/edit meal
+  // descriptions to fix macros for a day they logged late (Kyle's birthday
+  // dinner past midnight). Nutrition data only — never touches completion.
+  const canBackfill = !!plan && me.id === profile.userId
+  // Meal reqs move into the editable block when backfilling; the read-only
+  // grid keeps only non-meal proof photos then.
+  const photos = reqs.filter((r) => r.kind === 'photo' && (!isExtraMeal(r) || extraFilled(r)) && !(canBackfill && isMealReq(r)))
   const checks = reqs.filter((r) => r.kind === 'check')
+  const mealPhotoReqs = reqs.filter((r) => isMealReq(r) && (!isExtraMeal(r) || extraFilled(r))).sort((a, b) => a.sort - b.sort)
+  const extraMealSlots = reqs.filter((r) => isExtraMeal(r) && r.kind === 'photo').sort((a, b) => a.sort - b.sort)
+  const nextPhotoExtra = extraMealSlots.find((r) => !extraFilled(r))
+  const nextDescribeExtra = extraMealSlots.find((r) => !extraUsed(r))
+
+  async function onPickMeal(req, file) {
+    if (!file) return
+    setUploading(req.id); setSaveErr(null)
+    try {
+      await actions.uploadProof(challenge.id, me.id, date, req, file, log?.entriesByReq?.[req.id])
+      await actions.refresh()
+    } catch { setSaveErr(`"${req.label}" photo didn't save — try again.`) }
+    finally { setUploading(null) }
+  }
+  async function onClearMeal(req) {
+    setSaveErr(null)
+    try { await actions.clearPhotos(challenge.id, me.id, date, req); await actions.refresh() }
+    catch { setSaveErr(`Couldn't clear "${req.label}" — try again.`) }
+  }
 
   // Fuel summary — only if this member has a body plan and logged meals with
   // estimates that day. Sums the stored per-meal macro estimates.
-  const plan = plans?.find((p) => p.userId === profile.userId)
   const mealEntries = plan ? reqs.filter(isMealReq).map((r) => log?.entriesByReq?.[r.id]).filter(Boolean) : []
   const estP = mealEntries.reduce((a, e) => a + (e.estProtein || 0), 0)
   const estC = mealEntries.reduce((a, e) => a + (e.estCalories || 0), 0)
@@ -81,6 +111,33 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
           <FuelRow label="Protein" value={estP} unit="g" target={plan.proteinMin} max={plan.proteinMax} />
           <FuelRow label="Calories" value={estC} unit="" target={plan.calorieTarget} />
         </div>
+      )}
+
+      {canBackfill && (
+        <>
+          <div className="section-label" style={{ marginTop: hasFuel ? 4 : 0 }}>Meals this day</div>
+          <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
+            Add or edit a meal and the macros update — handy for a dinner you logged late.
+          </p>
+          <div className="slots-grid">
+            {mealPhotoReqs.map((r) => (
+              <PhotoSlot key={r.id} req={r} entry={log?.entriesByReq?.[r.id]} editable
+                uploading={uploading === r.id} onPick={(f) => onPickMeal(r, f)} onClear={() => onClearMeal(r)}
+                mealMode onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} />
+            ))}
+            {nextPhotoExtra && (
+              <AddMealSlot uploading={uploading === nextPhotoExtra.id}
+                onPick={(f) => onPickMeal(nextPhotoExtra, f)} captureOnly={nextPhotoExtra.captureOnly} />
+            )}
+          </div>
+          {nextDescribeExtra && (
+            <button className="btn btn-sm" style={{ marginTop: 8 }}
+              onClick={() => setCaptioning({ req: nextDescribeExtra, entry: log?.entriesByReq?.[nextDescribeExtra.id] })}>
+              <Icon name="edit" size={14} />Add a meal by description
+            </button>
+          )}
+          {saveErr && <div className="login-err" style={{ marginTop: 8 }}>{saveErr}</div>}
+        </>
       )}
 
       <div className="modal-photos">
@@ -153,6 +210,24 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
       <button className="btn btn-ghost btn-block" style={{ marginTop: 16 }} onClick={onClose}>Close</button>
 
       {zoom && <Lightbox path={zoom.path} label={zoom.label} onClose={() => setZoom(null)} />}
+
+      {captioning && (
+        <CaptionSheet req={captioning.req} entry={captioning.entry}
+          onSave={async (text) => {
+            const { req, entry } = captioning
+            setCaptioning(null); setSaveErr(null)
+            try {
+              // Existing entry (has a photo already) → just recaption; a fresh
+              // describe-only meal → create the entry on this day first.
+              const eid = entry?.id
+                ? (await actions.saveCaption(entry.id, text), entry.id)
+                : (await actions.logMealCaption(challenge.id, me.id, date, req, text)).id
+              await actions.refresh()
+              if (text.trim()) { await actions.estimateMeal(eid); await actions.refresh() }
+            } catch { setSaveErr(`Couldn't update "${req.label}" — try again.`) }
+          }}
+          onClose={() => setCaptioning(null)} />
+      )}
     </Sheet>
   )
 }

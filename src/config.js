@@ -12,6 +12,17 @@ export const LOGIN_DOMAIN = '75hard.app'
 export const usernameToEmail = (u) => `${u.trim().toLowerCase()}@${LOGIN_DOMAIN}`
 export const USERNAME_RE = /^[a-z0-9_]{3,20}$/
 
+// A built-in timer only makes sense for things you DO for a stretch of minutes
+// (read, workout, meditate, stretch, walk). It's nonsense on things you consume
+// or photograph — a meal, a gallon of water, a progress pic, a weigh-in (Kyle:
+// "timer shouldn't be an option on everything"). Blocklist, word-boundaried so
+// "sweat" isn't caught by "eat"; a blank/new label is allowed (don't prejudge).
+const NO_TIMER_RE = /\b(meal|meals|breakfast|lunch|dinner|snack|snacks|eat|eating|ate|food|diet|macro|macros|protein|calorie|calories|water|gallon|gallons|hydrate|hydration|oz|ounce|ounces|drink|drinks|shake|smoothie|photo|photos|pic|pics|picture|selfie|mirror|weigh|weight|scale|bodyweight|supplement|vitamin|vitamins|creatine|pill|pills)\b/i
+export function timerAllowed(label) {
+  const s = (label || '').trim()
+  return s ? !NO_TIMER_RE.test(s) : true
+}
+
 // Food-ish photo requirements get caption inputs + AI macro estimates.
 export const isMealReq = (r) =>
   r.kind === 'photo' && (

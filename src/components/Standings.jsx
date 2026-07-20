@@ -26,6 +26,12 @@ export default function Standings() {
   const todayLog = (uid) => logs.find((l) => l.userId === uid && l.logDate === cfg.todayStr)
   const format = cfg.format
   const solo = format === 'solo'
+  // A challenge is only "versus"/"team" once a second person is actually in it.
+  // Until then — even if it was SAVED as versus/accountability — show the calm
+  // solo view (one condensed card, no name, no pass/fail/pend trio), the point
+  // Miska kept making. Social formats still show the invite code so people can
+  // bring others in; joining flips this off automatically.
+  const soloView = participants.length <= 1
   const stakers = participants.filter((p) => p.stakeText)
   // Sole leader by approved days gets a crown; ties (or zero) crown no one.
   const leaderId = (() => {
@@ -49,10 +55,10 @@ export default function Standings() {
         <Leaderboard participants={participants} summaries={summaries} daysFor={daysFor} meId={me.id}
           leaderId={leaderId} soft={mode === 'soft'} />
       ) : (
-        <div className={'scoreboard' + (solo ? ' solo' : format === 'accountability' ? ' grid' : '')}>
+        <div className={'scoreboard' + (soloView ? ' solo' : format === 'accountability' ? ' grid' : '')}>
           {participants.map((p, i) => (
             <Fragment key={p.id}>
-              <Column s={summaries[p.userId]} p={p} totalDays={daysFor(p.userId)} isLeader={p.userId === leaderId} solo={solo} />
+              <Column s={summaries[p.userId]} p={p} totalDays={daysFor(p.userId)} isLeader={p.userId === leaderId} solo={soloView} />
               {format === 'versus' && i === 0 && participants.length === 2 && <div className="vs-divider">VS</div>}
             </Fragment>
           ))}
@@ -71,17 +77,16 @@ export default function Standings() {
         </div>
       )}
 
-      {/* Solo: no "Today's progress" section at all — it would restate the
-          Today tab with your own name on it (Miska's no-repetition rule).
-          Groups keep it: seeing everyone's day side by side IS the point. */}
-      {!solo && (
+      {/* One-person view: no "Today's progress" section — it would restate the
+          Today tab with your own name on it (Miska's no-repetition rule). Once
+          someone else joins, seeing everyone's day side by side IS the point. */}
+      {!soloView && (
         <>
           <div className="section-label">Today's progress</div>
           {started ? (
             participants.map((p) => (
               <PersonRow key={p.id} p={p} reqs={reqsFor(p.userId)} mine={p.userId === me.id}
-                log={todayLog(p.userId)} onOpen={() => setProof(p)} t={t}
-                days={daysFor(p.userId)} approved={summaries[p.userId]?.approved ?? 0} />
+                log={todayLog(p.userId)} onOpen={() => setProof(p)} t={t} />
             ))
           ) : (
             <div className="card center muted" style={{ padding: 18 }}>Everyone's daily goals will show up here when the challenge starts.</div>
@@ -160,43 +165,33 @@ function MiniRing({ pct, color }) {
 
 function Column({ s, p, totalDays, isLeader, solo }) {
   if (!s || !p) return null
-  if (solo) {
-    // Solo (Miska): no name (it's obviously you), no pass/fail/pend trio (History
-    // shows that) — one consolidated stat line plus the bar she likes.
-    const bits = []
-    if (s.streak > 0) bits.push(`${s.streak} day streak`)
-    if (s.pending > 0) bits.push(`${s.pending} pending`)
-    if (s.failed > 0) bits.push(`${s.failed} missed`)
-    return (
-      <div className="vs-col">
-        <div className="vs-day" style={{ color: p.accent }}>{s.approved}<small> of {totalDays} days passed</small></div>
-        {bits.length > 0 && (
-          <div className="vs-streak">
-            {s.streak > 0 && <Icon name="flame" size={14} fill="var(--amber)" />}
-            {bits.join(' · ')}
-          </div>
-        )}
-        <div className="bar" style={{ marginTop: 12 }}>
-          <div className="bar-fill" style={{ width: s.completionPct + '%', background: p.accent }} />
-        </div>
-        <div className="vs-mini-l" style={{ marginTop: 6 }}>{s.completionPct}% complete</div>
-      </div>
-    )
-  }
+  // One condensed card for EVERY format (Kyle: apply Miska's tightening to all
+  // modes, not just solo). No Pass/Fail/Pend trio — History already breaks that
+  // down — and no "0 day streak" filler: streak, pending, and missed appear
+  // only when nonzero, as one line. Versus/team keep the name to tell people
+  // apart; solo drops it (it's obviously you).
+  const bits = []
+  if (s.streak > 0) bits.push(`${s.streak} day streak`)
+  if (s.pending > 0) bits.push(`${s.pending} pending`)
+  if (s.failed > 0) bits.push(`${s.failed} missed`)
   return (
     <div className="vs-col">
-      <div className="vs-name">
-        <span className="vs-dot" style={{ background: p.accent }} />
-        {p.displayName}
-        {isLeader && <Icon name="crown" size={14} className="lb-crown" />}
+      {!solo && (
+        <div className="vs-name">
+          <span className="vs-dot" style={{ background: p.accent }} />
+          {p.displayName}
+          {isLeader && <Icon name="crown" size={14} className="lb-crown" />}
+        </div>
+      )}
+      <div className="vs-day" style={{ color: p.accent }}>
+        {s.approved}<small> {solo ? `of ${totalDays} days passed` : 'passed'}</small>
       </div>
-      <div className="vs-day" style={{ color: p.accent }}>{s.approved}<small> passed</small></div>
-      <div className="vs-streak"><Icon name="flame" size={14} fill="var(--amber)" />{s.streak} day streak</div>
-      <div className="vs-row">
-        <div className="vs-mini"><div className="vs-mini-n" style={{ color: 'var(--green)' }}>{s.approved}</div><div className="vs-mini-l">Pass</div></div>
-        <div className="vs-mini"><div className="vs-mini-n" style={{ color: s.failed ? 'var(--red)' : 'var(--muted)' }}>{s.failed}</div><div className="vs-mini-l">Fail</div></div>
-        <div className="vs-mini"><div className="vs-mini-n" style={{ color: s.pending ? 'var(--amber)' : 'var(--muted)' }}>{s.pending}</div><div className="vs-mini-l">Pend</div></div>
-      </div>
+      {bits.length > 0 && (
+        <div className="vs-streak">
+          {s.streak > 0 && <Icon name="flame" size={14} fill="var(--amber)" />}
+          {bits.join(' · ')}
+        </div>
+      )}
       <div className="bar" style={{ marginTop: 12 }}>
         <div className="bar-fill" style={{ width: s.completionPct + '%', background: p.accent }} />
       </div>
@@ -208,7 +203,7 @@ function Column({ s, p, totalDays, isLeader, solo }) {
 // Compact icon-level row (Miska's design): counts + requirement icons, never
 // photo thumbnails — pixels live behind "See proof", gated by the owner's
 // privacy setting. Uniform for everyone, scales to community size.
-function PersonRow({ p, reqs, mine, log, onOpen, t, days, approved }) {
+function PersonRow({ p, reqs, mine, log, onOpen, t }) {
   const total = logTotal(reqs)
   const done = logDone(reqs, log)
   const complete = isLogComplete(reqs, log)
@@ -229,7 +224,6 @@ function PersonRow({ p, reqs, mine, log, onOpen, t, days, approved }) {
       <div className="tc-head">
         <span className="vs-name"><span className="vs-dot" style={{ background: p.accent }} />{p.displayName}{mine && <span className="tc-you">you</span>}</span>
         <span className="prow-nums">
-          <span className="tc-count" style={{ color: p.accent }}>{approved}<small> passed</small></span>
           <span className="tc-count" style={{ color: done === total && total > 0 ? 'var(--green)' : 'var(--text)' }}>{done}<small>/{total} today</small></span>
         </span>
       </div>

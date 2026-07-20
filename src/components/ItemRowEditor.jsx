@@ -1,4 +1,5 @@
 import Icon from './Icons.jsx'
+import { timerAllowed } from '../config.js'
 
 // One checklist item's editor row — shared by the AI review screen, the manual
 // builder, and the post-create Edit Checklist sheet, so the controls (and their
@@ -32,8 +33,13 @@ export default function ItemRowEditor({ it, onChange, onRemove }) {
             onClick={() => onChange({ kind: 'photo', icon: 'camera', timesPerDay: null })}>📷 Photo</button>
           <button type="button" className={it.kind === 'check' ? 'on' : ''} title="Just check it off"
             onClick={() => onChange({ kind: 'check', icon: 'bolt', captureOnly: false })}>✓ Check</button>
-          <button type="button" className={it.kind === 'timer' ? 'on' : ''} title="Run a built-in timer"
-            onClick={() => onChange({ kind: 'timer', icon: 'clock', captureOnly: false, timesPerDay: null, minMinutes: it.minMinutes || 10 })}>⏱ Timer</button>
+          {/* Timer only for things you DO for minutes — hidden on meals, water,
+              photos, weigh-ins. Kept visible if the item already IS a timer, so
+              it never gets stuck with no way to switch off. */}
+          {(timerAllowed(it.label) || it.kind === 'timer') && (
+            <button type="button" className={it.kind === 'timer' ? 'on' : ''} title="Run a built-in timer"
+              onClick={() => onChange({ kind: 'timer', icon: 'clock', captureOnly: false, timesPerDay: null, minMinutes: it.minMinutes || 10 })}>⏱ Timer</button>
+          )}
         </div>
         <button className="br-del" onClick={onRemove} title="Remove"><Icon name="x" size={15} /></button>
       </div>

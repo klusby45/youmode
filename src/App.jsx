@@ -213,7 +213,7 @@ export default function App() {
   const actions = useMemo(() => ({
     refresh, signOut, switchChallenge,
     uploadProof: api.uploadProof, clearPhotos: api.clearPhotos, setChecked: api.setChecked, setCheckCount: api.setCheckCount,
-    saveCaption: api.saveCaption, estimateMeal: api.estimateMeal, addWeighIn: api.addWeighIn,
+    saveCaption: api.saveCaption, estimateMeal: api.estimateMeal, logMealCaption: api.logMealCaption, addWeighIn: api.addWeighIn,
     dismissAiFlag: api.dismissAiFlag, reviewDay: api.reviewDay,
     updateMyMember: api.updateMyMember, renameChallenge: api.renameChallenge, signedUrl: api.signedUrl,
     setReqPrivacy: api.setReqPrivacy,
@@ -313,8 +313,10 @@ export default function App() {
   const myDays = isReferee ? maxDays : daysFor(me.id)
 
   // "Standings" reads like a competition — right for versus, wrong for a solo
-  // run or a support crew (Miska). The tab renames itself to match the format.
-  const standingsLabel = cfg.format === 'solo' ? 'Progress' : cfg.format === 'versus' ? 'Standings' : 'Team'
+  // run or a support crew (Miska). Rename by ACTUAL people: one person is always
+  // "Progress" (even a versus that no one's joined yet); 2+ follows the format.
+  const standingsLabel = participants.length <= 1 ? 'Progress'
+    : cfg.format === 'versus' ? 'Standings' : 'Team'
   const tabs = [
     ...(!isReferee ? [['today', 'today', 'Today']] : []),
     ['standings', 'versus', standingsLabel],
@@ -1521,6 +1523,28 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .lock-pill.on{background:color-mix(in srgb, var(--amber) 18%, transparent);color:var(--amber)}
 .lock-opt .to-label{flex:1}
 .danger-opt .to-label{color:var(--red)}
+/* Settings sheet: compact iconed section labels + action rows (Miska: fewer
+   words, more visual). set-action rows lead with an icon, no sub-copy. */
+.set-label{display:flex;align-items:center;gap:7px;font-family:var(--cond);font-weight:600;font-size:11px;
+  letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin:20px 4px 9px}
+.set-label svg{color:var(--muted-2);flex:none}
+.set-action{gap:11px}
+.set-action .to-label{flex:1;text-transform:none;letter-spacing:.2px;font-size:15px}
+.set-action > svg:first-child{flex:none;color:var(--brand)}
+.set-action .set-chev{color:var(--muted-2)}
+.danger-opt.set-action > svg:first-child{color:var(--red)}
+/* Add-item row (edit checklist): three even, wrapping buttons */
+.add-row{display:flex;gap:8px;margin-top:6px}
+.add-row .btn{flex:1;justify-content:center}
+/* Dictation box: textarea with a mic tucked in the corner */
+.guide-box{position:relative}
+.guide-box textarea{width:100%;padding-right:46px}
+.mic-btn{position:absolute;right:8px;bottom:8px;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--line-2);background:var(--panel);color:var(--muted);cursor:pointer}
+.mic-btn.rec{background:var(--red);border-color:var(--red);color:#fff;animation:mic-pulse 1.1s ease-in-out infinite}
+.lin .mic-btn{background:var(--lpc-card);border-color:var(--lpc-line);color:var(--lpc-mut)}
+.lin .mic-btn.rec{background:var(--lpc-red);border-color:var(--lpc-red);color:#fff}
+@keyframes mic-pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--red) 45%,transparent)}50%{box-shadow:0 0 0 6px transparent}}
 .danger-opt svg{color:var(--red);opacity:.8}
 .danger-confirm{background:color-mix(in srgb,var(--red) 7%,transparent);border:1px solid color-mix(in srgb,var(--red) 28%,transparent);border-radius:14px;padding:14px}
 .theme-swatch{width:36px;height:36px;border-radius:11px;border:1px solid var(--line-2);flex:none;
