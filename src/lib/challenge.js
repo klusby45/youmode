@@ -6,6 +6,8 @@
 // Honor mode: challenges with no referee auto-approve completed days.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { isMealReq } from '../config.js'
+
 const MS_PER_DAY = 86_400_000
 
 // 'YYYY-MM-DD' for "now" in the given IANA timezone. en-CA renders ISO order.
@@ -63,20 +65,46 @@ export function entrySatisfies(req, entry) {
 //     month") — you can't do them every day, so they'd wrongly fail most
 //     days. They get their own display-only progress (weeklyProgress /
 //     monthlyProgress); they never touch dayState.
-const required = (reqs) => reqs.filter((r) => !r.optional && r.frequency !== 'weekly' && r.frequency !== 'monthly')
+const isDaily = (r) => r.frequency !== 'weekly' && r.frequency !== 'monthly'
+const required = (reqs) => reqs.filter((r) => !r.optional && isDaily(r))
+
+// Meal photos are FUNGIBLE. A day asks for a NUMBER of meal photos, not for
+// specific numbered boxes: eating your second meal and logging it in the
+// "Extra Meal" slot still means you ate it and photographed it. So every daily
+// meal photo — the numbered slots AND the optional extras/shake slots — forms
+// one pool, and the day's meal duty is met once that pool holds as many photos
+// as there are required meal slots. Without this, an honest day fails purely
+// because real food landed in the "wrong" slot (Kyle, 2026-07-25: logged a
+// 951-cal smoothie as "Extra Meal" instead of "Meal 2").
+// Optional meal slots still never ADD to the target; they only help fill it.
+const isMealPhoto = (r) => r.kind === 'photo' && isDaily(r) && isMealReq(r)
+const mealTarget = (reqs) => reqs.filter((r) => isMealPhoto(r) && !r.optional).length
+const mealsLogged = (reqs, log) =>
+  reqs.filter((r) => isMealPhoto(r) && entrySatisfies(r, log?.entriesByReq?.[r.id])).length
+// Everything that still has to be satisfied slot by slot.
+const requiredNonMeal = (reqs) => required(reqs).filter((r) => !isMealPhoto(r))
+
+// Display helper: "3 of 3 meals". met === the meal duty is done for the day.
+export function mealProgress(reqs, log) {
+  const target = mealTarget(reqs)
+  const logged = mealsLogged(reqs, log)
+  return { logged, target, met: logged >= target }
+}
 
 export function isLogComplete(reqs, log) {
   const must = required(reqs)
   if (!log || !must.length) return false
-  return must.every((r) => entrySatisfies(r, log.entriesByReq?.[r.id]))
+  if (mealsLogged(reqs, log) < mealTarget(reqs)) return false
+  return requiredNonMeal(reqs).every((r) => entrySatisfies(r, log.entriesByReq?.[r.id]))
 }
 
 export function logDone(reqs, log) {
-  return required(reqs).filter((r) => entrySatisfies(r, log?.entriesByReq?.[r.id])).length
+  const meals = Math.min(mealTarget(reqs), mealsLogged(reqs, log))
+  return requiredNonMeal(reqs).filter((r) => entrySatisfies(r, log?.entriesByReq?.[r.id])).length + meals
 }
 
 export function logTotal(reqs) {
-  return required(reqs).length
+  return requiredNonMeal(reqs).length + mealTarget(reqs)
 }
 
 // Display-only weekly-cadence progress. Challenge-relative weeks: weekIndex =

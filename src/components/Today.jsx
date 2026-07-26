@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../appContext.js'
 import { isMealReq } from '../config.js'
-import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, checkCount, weeklyProgress, monthlyProgress } from '../lib/challenge.js'
+import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, checkCount, weeklyProgress, monthlyProgress, mealProgress } from '../lib/challenge.js'
 import { IS_MOBILE } from '../lib/device.js'
 import { tapHaptic } from '../lib/native.js'
 import * as api from '../data.js'
@@ -158,7 +158,14 @@ export default function Today() {
   // via the "+ Add a meal" tile (body-goal users only).
   const isFilled = (r) => { const e = log?.entriesByReq?.[r.id]; return !!(e?.photoPaths?.length || e?.photoPath) }
   const daily = (r) => r.frequency !== 'weekly' && r.frequency !== 'monthly'
-  const photos = reqs.filter((r) => r.kind === 'photo' && daily(r) && (!api.isExtraMeal(r) || isFilled(r)))
+  // Meals pool (see challenge.js): once you've logged as many meal photos as
+  // the day asks for, a leftover empty "Meal 2" box is just anxiety — the meal
+  // duty is already done, in whatever order the food actually happened. Drop
+  // the unfilled numbered slots then, the way filled-only extras already work.
+  const mealPool = mealProgress(reqs, log)
+  const mealSlotDone = (r) => mealPool.met && isMealReq(r) && !r.optional && !isFilled(r)
+  const photos = reqs.filter((r) => r.kind === 'photo' && daily(r)
+    && (!api.isExtraMeal(r) || isFilled(r)) && !mealSlotDone(r))
   const checks = reqs.filter((r) => r.kind === 'check' && daily(r))
   const timers = reqs.filter((r) => r.kind === 'timer' && daily(r))
   // Weekly-cadence items live in their own "This week" section — they never
@@ -213,7 +220,14 @@ export default function Today() {
             target={myPlan.proteinMin} max={myPlan.proteinMax} />
           <MacroRow label="Calories" value={estC} unit=""
             target={myPlan.calorieTarget} />
-          <div className="mb-hint">{meals.length ? 'estimates from your meal photos + captions' : 'log meals with captions to start counting'}</div>
+          {/* The meal count lives here now that satisfied slots stop rendering,
+              so "am I covered?" is answerable without counting tiles. */}
+          <div className="mb-hint">
+            {mealPool.target > 0 && (mealPool.met
+              ? <>all {mealPool.target} meals logged · </>
+              : <>{mealPool.logged} of {mealPool.target} meals · </>)}
+            {meals.length ? 'estimates from your photos + captions' : 'add captions to start counting'}
+          </div>
         </div>
       )}
 

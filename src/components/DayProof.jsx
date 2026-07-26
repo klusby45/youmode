@@ -3,7 +3,7 @@ import { useApp } from '../appContext.js'
 import { isMealReq } from '../config.js'
 import { isExtraMeal } from '../data.js'
 import { canSeePhotos } from '../lib/privacy.js'
-import { dayState, logDone, logTotal, entrySatisfies } from '../lib/challenge.js'
+import { dayState, logDone, logTotal, entrySatisfies, mealProgress } from '../lib/challenge.js'
 import Icon from './Icons.jsx'
 import ProofImage from './ProofImage.jsx'
 import Sheet from './Sheet.jsx'
@@ -54,7 +54,12 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
   const canBackfill = !!plan && me.id === profile.userId
   // Meal reqs move into the editable block when backfilling; the read-only
   // grid keeps only non-meal proof photos then.
-  const photos = reqs.filter((r) => r.kind === 'photo' && (!isExtraMeal(r) || extraFilled(r)) && !(canBackfill && isMealReq(r)))
+  // Meals pool: an empty numbered slot on a day whose meal count was already
+  // met isn't a gap, so don't show it as one. (The backfill block below still
+  // lists every slot — there it's an affordance to add, not a missing item.)
+  const mealsMet = mealProgress(reqs, log).met
+  const photos = reqs.filter((r) => r.kind === 'photo' && (!isExtraMeal(r) || extraFilled(r))
+    && !(canBackfill && isMealReq(r)) && !(mealsMet && isMealReq(r) && !r.optional && !extraFilled(r)))
   const checks = reqs.filter((r) => r.kind === 'check')
   const mealPhotoReqs = reqs.filter((r) => isMealReq(r) && (!isExtraMeal(r) || extraFilled(r))).sort((a, b) => a.sort - b.sort)
   const extraMealSlots = reqs.filter((r) => isExtraMeal(r) && r.kind === 'photo').sort((a, b) => a.sort - b.sort)
