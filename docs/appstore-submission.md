@@ -40,18 +40,34 @@ Collection purpose for all: **App Functionality**. Account deletion: in-app (ava
 > username: applereview
 > password: <REDACTED — this repo is public; use the real password shared privately when pasting into App Store Connect, whose Notes field is private>
 >
-> Suggested tour: the Today tab shows Day 5 of a running challenge — tap "Journal" twice to log a twice-a-day item, tap "Meditate" to run the built-in timer (it completes the item by itself), and see weekly/monthly items in their own sections. Standings, History, and Goals tabs show progress. Tap the avatar (top right) for looks/voices, checklist editing, and in-app account deletion.
+> Suggested tour: the Today tab opens on a challenge already in progress, with some items done and some still open — tap "Journal" twice to log a twice-a-day item, tap "Meditate" to run the built-in timer (it completes the item by itself), and see weekly/monthly items in their own sections. Progress, History, and Goals tabs show the run so far. Tap the avatar (top right) for looks/voices, checklist editing, and in-app account deletion.
 >
 > Creating an account requires only a username and password (no email verification). The voice-to-challenge setup uses the microphone with permission; typing works identically without it.
 >
 > Health note: users may OPTIONALLY set weight/nutrition targets; the app applies conservative safety floors and refers users to professionals for anything outside safe ranges. No medical claims.
 
 ## Screenshots
-6.9" set (1320×2868) generated at `scratchpad/appstore-shots/` — upload in this order:
-1-today (hero: ring + photo/check/counter/timer/weekly/monthly), 2-standings, 3-history, 4-goals, 5-make-it-yours.
-The same set may be reused for the 6.5" slot (App Store Connect accepts 1320×2868 there too).
+NEEDED — the earlier set lived in a session scratchpad and is gone. Regenerate into
+`docs/appstore-shots/` (durable, not a temp dir) so this can't evaporate again.
+Capture from an **iPhone 16 Pro Max simulator** (1320×2868 is the required 6.9" size;
+a smaller physical phone will not produce an accepted size). Order to upload:
+1-today (ring + photo/check/counter/timer/weekly/monthly), 2-progress, 3-history, 4-goals, 5-make-it-yours.
+The same set may be reused for the 6.5" slot.
+Blocked on `xcode-select` pointing at Xcode — see Build & upload step 0.
+
+## Demo account state (verified 2026-07-27)
+`applereview` / "Jordan", challenge "Morning Momentum", solo, **day 14 of 90** (runs to
+2026-10-11 so it cannot lapse mid-review, even across resubmissions). Days 1-13 complete
+with a real proof image in storage; today deliberately left partial so the reviewer sees
+both done and to-do items. Showcases every proof type: photo, check, 2×/day check, timer,
+weekly, monthly. Password was rotated 2026-07-27 and shared with Kyle privately — paste
+that value into the App Store Connect notes, not into this file.
 
 ## Build & upload (Kyle + Claude together, ~20 min)
+0. **Point the command line at Xcode** (needs Kyle's password, one time — as of
+   2026-07-27 this was still unset, which blocks every CLI/simulator build):
+   `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`
+   The Xcode GUI archives fine without this; simulator screenshots and headless builds do not.
 1. `cd ios/App && open App.xcodeproj` — select the **App** target → Signing & Capabilities → check "Automatically manage signing" → Team: Kyle's Apple Developer team.
 2. Bump Marketing Version to `1.0.0` if needed (General tab).
 3. Menu: Product → Archive (destination "Any iOS Device"). When the Organizer opens: **Distribute App → App Store Connect → Upload** (defaults are fine).
