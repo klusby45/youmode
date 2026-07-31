@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../appContext.js'
-import { daysBetween, isLogComplete } from '../lib/challenge.js'
+import { daysBetween, isLogComplete, entrySatisfies } from '../lib/challenge.js'
 import Icon from './Icons.jsx'
 import ProofImage from './ProofImage.jsx'
 import Lightbox from './Lightbox.jsx'
@@ -86,6 +86,10 @@ function ReviewCard({ log, member, reqs, day, saved }) {
     const e = log.entriesByReq[r.id]
     return e?.aiFlag && !e.aiDismissed
   })
+  // A redeemed day only has entries if they went back and logged it, so the
+  // presence of any proof IS the "added after the fact" signal — no timestamp
+  // bookkeeping needed, since no other past day can be written to.
+  const lateProof = saved && reqs.some((r) => entrySatisfies(r, log.entriesByReq?.[r.id]))
 
   return (
     <div className="review-card">
@@ -100,8 +104,17 @@ function ReviewCard({ log, member, reqs, day, saved }) {
         <div className="card" style={{ margin: '0 0 12px', padding: 12, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
           <Icon name="shield" size={16} />
           <span className="muted" style={{ fontSize: 13 }}>
-            <b style={{ color: 'var(--text)' }}>Used their one save.</b> This day is short and won't pass on its own.
-            Approving it counts the day; rejecting it fails the day. Either way the save is spent.
+            {lateProof ? (
+              <>
+                <b style={{ color: 'var(--text)' }}>Used their one save, then logged this day late.</b> The proof below was
+                added after the day ended, so it's their word that it happened on the day. Your call.
+              </>
+            ) : (
+              <>
+                <b style={{ color: 'var(--text)' }}>Used their one save.</b> This day is short and won't pass on its own.
+              </>
+            )}
+            {' '}Approving it counts the day; rejecting it fails the day. Either way the save is spent.
           </span>
         </div>
       )}

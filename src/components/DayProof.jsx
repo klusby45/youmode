@@ -3,7 +3,7 @@ import { useApp } from '../appContext.js'
 import { isMealReq } from '../config.js'
 import { isExtraMeal } from '../data.js'
 import { canSeePhotos } from '../lib/privacy.js'
-import { dayState, logDone, logTotal, entrySatisfies, mealProgress, addDays } from '../lib/challenge.js'
+import { dayState, logDone, logTotal, entrySatisfies, mealProgress, addDays, canEditDay } from '../lib/challenge.js'
 import Icon from './Icons.jsx'
 import ProofImage from './ProofImage.jsx'
 import Sheet from './Sheet.jsx'
@@ -73,10 +73,51 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
   const photos = reqs.filter((r) => r.kind === 'photo' && (!isExtraMeal(r) || extraFilled(r))
     && !(canBackfill && isMealReq(r)) && !(mealsMet && isMealReq(r) && !r.optional && !extraFilled(r)))
   const checks = reqs.filter((r) => r.kind === 'check')
+  // Spent your save on this day? Then it reopens for the proof you forgot to
+  // log. Your own day only, and only this one date — see canEditDay. Declared
+  // after canBackfill because it defers meal slots to the backfill block.
+  const canLateLog = me.id === profile.userId && date !== cfg.todayStr
+    && canEditDay(date, cfg, ownerRedemption)
+  const lateReqs = canLateLog
+    ? reqs.filter((r) => !isExtraMeal(r) && !(canBackfill && isMealReq(r))
+        && r.frequency !== 'weekly' && r.frequency !== 'monthly')
+        .sort((a, b) => (a.sort || 0) - (b.sort || 0))
+    : []
+  // Anything the late block owns is dropped from the read-only views below so
+  // a requirement never renders twice in the same sheet.
+  const inLate = (r) => lateReqs.some((x) => x.id === r.id)
   const mealPhotoReqs = reqs.filter((r) => isMealReq(r) && (!isExtraMeal(r) || extraFilled(r))).sort((a, b) => a.sort - b.sort)
   const extraMealSlots = reqs.filter((r) => isExtraMeal(r) && r.kind === 'photo').sort((a, b) => a.sort - b.sort)
   const nextPhotoExtra = extraMealSlots.find((r) => !extraFilled(r))
   const nextDescribeExtra = extraMealSlots.find((r) => !extraUsed(r))
+
+  // Late proof on a redeemed day. Same writes as Today, pointed at that date;
+  // RLS is ownership-only with no date gate, so nothing server-side changes.
+  async function onPickLate(req, file) {
+    if (!file) return
+    setUploading(req.id); setSaveErr(null)
+    try {
+      await actions.uploadProof(challenge.id, me.id, date, req, file, log?.entriesByReq?.[req.id])
+      await actions.refresh()
+    } catch { setSaveErr(`"${req.label}" photo didn't save — try again.`) }
+    finally { setUploading(null) }
+  }
+  async function onClearLate(req) {
+    setUploading(req.id); setSaveErr(null)
+    try {
+      await actions.clearPhotos(challenge.id, me.id, date, req)
+      await actions.refresh()
+    } catch { setSaveErr("Couldn't remove that photo — try again.") }
+    finally { setUploading(null) }
+  }
+  async function onToggleLate(req) {
+    const on = entrySatisfies(req, log?.entriesByReq?.[req.id])
+    setSaveErr(null)
+    try {
+      await actions.setChecked(challenge.id, me.id, date, req, !on)
+      await actions.refresh()
+    } catch { setSaveErr(`"${req.label}" didn't save — try again.`) }
+  }
 
   async function onPickMeal(req, file) {
     if (!file) return
@@ -113,6 +154,43 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
 
       {canSave && <UseSave date={date} memberId={myMember.id} hasReferee={cfg.hasReferee}
         onDone={actions.refresh} useRedemption={actions.useRedemption} />}
+
+      {/* Redeemed day: add the proof you actually earned but forgot to log.
+          This never decides the day on its own — a referee still rules, and on
+          the honor system the day stays excused rather than passed. */}
+      {canLateLog && lateReqs.length > 0 && (
+        <>
+          <div className="section-label" style={{ marginTop: 2 }}>Add what you missed</div>
+          <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
+            {cfg.hasReferee
+              ? 'You used your save on this day, so you can still log it. It goes to the referee marked as added after the fact.'
+              : 'You used your save on this day, so you can still log it. The day stays saved either way.'}
+          </p>
+          <div className="slots-grid">
+            {lateReqs.filter((r) => r.kind === 'photo').map((r) => (
+              <PhotoSlot key={r.id} req={r} entry={log?.entriesByReq?.[r.id]} editable
+                uploading={uploading === r.id} onPick={(f) => onPickLate(r, f)} onClear={() => onClearLate(r)}
+                mealMode={false} />
+            ))}
+          </div>
+          {lateReqs.filter((r) => r.kind !== 'photo').map((r) => {
+            const on = entrySatisfies(r, log?.entriesByReq?.[r.id])
+            return (
+              <button key={r.id} className={'watertoggle' + (on ? ' on' : '')} onClick={() => onToggleLate(r)}
+                style={{ marginBottom: 8 }}>
+                <span className="wt-box" style={on ? { background: 'var(--blue)', borderColor: 'var(--blue)', color: '#fff' } : undefined}>
+                  {on && <Icon name="check" size={18} />}
+                </span>
+                <span style={{ flex: 1 }}>
+                  <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
+                  <span className="wt-hint">{on ? 'Logged ✓' : (r.hint || 'Tap if you did it')}</span>
+                </span>
+                <Icon name={r.icon || 'bolt'} size={22} style={{ color: on ? 'var(--blue)' : 'var(--muted-2)' }} />
+              </button>
+            )
+          })}
+        </>
+      )}
 
       {log?.judgeNote && (
         <div className="card" style={{ marginBottom: 12, padding: 12 }}>
@@ -161,7 +239,7 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
       )}
 
       <div className="modal-photos">
-        {photos.flatMap((r) => {
+        {photos.filter((r) => !inLate(r)).flatMap((r) => {
           const e = log?.entriesByReq?.[r.id]
           const flagged = e?.aiFlag && !e.aiDismissed
           const paths = e?.photoPaths?.length ? e.photoPaths : (e?.photoPath ? [e.photoPath] : [null])
@@ -211,7 +289,7 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
         </div>
       )}
 
-      {checks.map((r) => {
+      {checks.filter((r) => !inLate(r)).map((r) => {
         const on = entrySatisfies(r, log?.entriesByReq?.[r.id])
         return (
           <div key={r.id} className="watertoggle" style={{ marginTop: 10, cursor: 'default', opacity: on ? 1 : 0.5 }}>

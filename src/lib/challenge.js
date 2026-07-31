@@ -276,8 +276,13 @@ export function goalStatus(member, config) {
 }
 
 // Same-day-only editing (prevents backfilling a past day to dodge a fail).
-export function canEditDay(logDate, config) {
-  return logDate === config.todayStr
+// The ONE exception is the day you spent your save on: you've already paid for
+// it, it's one per challenge, and a referee still rules on the result — so
+// letting you attach the proof you forgot to log beats making them judge a
+// blank day on your word. No other past day ever opens.
+export function canEditDay(logDate, config, redemptionDate) {
+  if (logDate === config.todayStr) return true
+  return !!redemptionDate && logDate === redemptionDate
 }
 
 // Challenge format governs standings layout + framing. When a challenge has no
