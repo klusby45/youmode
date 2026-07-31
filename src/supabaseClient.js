@@ -35,6 +35,9 @@ const nMember = (r) => r && ({
   goalLaunchedAt: r.goal_launched_at, goalCurrentCount: r.goal_current_count,
   displayName: r.profiles?.display_name || r.display_name || '',
   photoSharing: r.profiles?.photo_sharing ?? null, // owner's account-level photo privacy
+  // One-time save: null until spent, then the date it was spent on. Undefined
+  // (not null) pre-migration — treated the same everywhere: nothing spent.
+  redemptionDate: r.redemption_date ?? null,
 })
 const nReq = (r) => r && ({
   id: r.id, challengeId: r.challenge_id, userId: r.user_id, key: r.key,
@@ -661,6 +664,22 @@ async function requestAiReview(entryId) {
       body: JSON.stringify({ entryId }),
     }).catch(() => {})
   } catch { /* best-effort only */ }
+}
+
+// ─── one-time redemption ("your one save") ───────────────────────────────
+// Spends the member's single save on a date. The once-only guard lives in the
+// SQL function, so a second attempt fails server-side even if the UI slips.
+export async function useRedemption(memberId, date) {
+  const { data, error } = await supabase.rpc('use_redemption', { p_member_id: memberId, p_date: date })
+  if (error) {
+    // Pre-migration the function doesn't exist yet: say so plainly instead of
+    // leaking a Postgres error at someone who just missed a day.
+    if (/could not find|does not exist|schema cache/i.test(error.message || '')) {
+      throw new Error("Saves aren't switched on yet. Try again once the update lands.")
+    }
+    throw new Error(error.message || "Couldn't use your save.")
+  }
+  return nMember(data)
 }
 
 // ─── referee verdict ──────────────────────────────────────────────────────

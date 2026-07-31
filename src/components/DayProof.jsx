@@ -3,7 +3,7 @@ import { useApp } from '../appContext.js'
 import { isMealReq } from '../config.js'
 import { isExtraMeal } from '../data.js'
 import { canSeePhotos } from '../lib/privacy.js'
-import { dayState, logDone, logTotal, entrySatisfies, mealProgress } from '../lib/challenge.js'
+import { dayState, logDone, logTotal, entrySatisfies, mealProgress, addDays } from '../lib/challenge.js'
 import Icon from './Icons.jsx'
 import ProofImage from './ProofImage.jsx'
 import Sheet from './Sheet.jsx'
@@ -17,12 +17,18 @@ const stateChip = (t) => ({
   fail: ['chip-red', t('proof.status.fail'), 'x'],
   active: ['chip-amber', t('proof.status.active'), 'bolt'],
   upcoming: ['chip-muted', t('proof.status.upcoming'), 'clock'],
+  excused: ['chip-muted', 'Saved', 'shield'],
 })
 
 // Read-only detail of one member's day: photos (tap to zoom), checks, AI
 // flags, verdict. Rendered as a swipe-dismissable bottom sheet.
 export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, totalDays, onClose }) {
-  const { isReferee, plans, t, me, actions, challenge } = useApp()
+  const { isReferee, plans, t, me, actions, challenge, myMember, members } = useApp()
+  // Resolve the day owner's member row LIVE rather than trusting the profile
+  // snapshot taken when the cell was tapped — otherwise spending a save inside
+  // this sheet leaves the header still reading "failed" until it's reopened.
+  const ownerMember = members.find((m) => m.userId === profile.userId)
+  const ownerRedemption = ownerMember?.redemptionDate ?? profile.redemptionDate ?? null
   const [zoom, setZoom] = useState(null) // { path, label }
   const [uploading, setUploading] = useState(null) // req id of an in-flight meal photo
   const [captioning, setCaptioning] = useState(null) // { req, entry } meal being described
@@ -40,7 +46,13 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
     logsByDate: log ? { [date]: log } : {},
     reqs,
     hasReferee: cfg.hasReferee,
+    redemptionDate: ownerRedemption,
   })
+  // The one save: offered only on YOUR OWN failed day, only for yesterday
+  // (a save for a fresh miss, not a tool for rewriting old results), and only
+  // while you still have it. Spending it is irreversible, so UseSave confirms.
+  const canSave = !!myMember && me.id === profile.userId && state === 'fail'
+    && !ownerRedemption && date === addDays(cfg.todayStr, -1)
   const chips = stateChip(t)
   const [chipCls, chipLabel, chipIcon] = chips[state] || chips.upcoming
   const total = logTotal(reqs)
@@ -98,6 +110,9 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
         </div>
         <span className={'chip ' + chipCls}><Icon name={chipIcon} size={13} />{chipLabel}</span>
       </div>
+
+      {canSave && <UseSave date={date} memberId={myMember.id} hasReferee={cfg.hasReferee}
+        onDone={actions.refresh} useRedemption={actions.useRedemption} />}
 
       {log?.judgeNote && (
         <div className="card" style={{ marginBottom: 12, padding: 12 }}>
@@ -234,6 +249,45 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
           onClose={() => setCaptioning(null)} />
       )}
     </Sheet>
+  )
+}
+
+// Your one save. Everyone gets exactly one per challenge, so this asks twice:
+// the first tap explains what it costs, the second spends it. Deliberately
+// undersold — it's a safety net for a real life day, not something to farm.
+function UseSave({ date, memberId, hasReferee, onDone, useRedemption }) {
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  if (!confirming) {
+    return (
+      <button className="card save-offer" onClick={() => setConfirming(true)}>
+        <Icon name="shield" size={17} />
+        <span className="so-txt">
+          <b>Use your one save</b>
+          <small>{hasReferee ? 'Send this day to the referee instead of a fail.' : 'Keep this day from failing. You only get one.'}</small>
+        </span>
+        <Icon name="chevron" size={15} />
+      </button>
+    )
+  }
+  return (
+    <div className="card" style={{ marginBottom: 12, padding: 14 }}>
+      <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>
+        {hasReferee
+          ? 'This sends the day to the referee to decide. They can still say no, and either way the save is gone for the rest of the challenge.'
+          : "This day stops counting as a fail and your streak keeps going. It won't count as a day you passed. One per challenge."}
+      </p>
+      {err && <div className="login-err" style={{ textAlign: 'left', marginBottom: 10 }}>{err}</div>}
+      <div className="review-actions">
+        <button className="btn btn-ghost" disabled={busy} onClick={() => { setConfirming(false); setErr(null) }}>Keep it</button>
+        <button className="btn btn-accent" disabled={busy} onClick={async () => {
+          setBusy(true); setErr(null)
+          try { await useRedemption(memberId, date); await onDone() }
+          catch (e) { setErr(e.message); setBusy(false) }
+        }}>{busy ? 'Saving…' : 'Use it on this day'}</button>
+      </div>
+    </div>
   )
 }
 

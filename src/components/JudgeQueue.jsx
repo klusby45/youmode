@@ -9,8 +9,12 @@ export default function JudgeQueue() {
   const { logs, members, participants, cfg, reqsFor, myMember, t } = useApp()
 
   const memberOf = (uid) => members.find((m) => m.userId === uid)
+  // A redeemed day is INCOMPLETE by definition — that's why it was redeemed —
+  // so it would never pass the isLogComplete gate. Let it through explicitly:
+  // deciding it is the whole point of the save in a refereed challenge.
+  const isSaved = (l) => memberOf(l.userId)?.redemptionDate === l.logDate
   const queue = logs
-    .filter((l) => l.status === 'pending' && isLogComplete(reqsFor(l.userId), l))
+    .filter((l) => l.status === 'pending' && (isLogComplete(reqsFor(l.userId), l) || isSaved(l)))
     .sort((a, b) => (a.logDate < b.logDate ? -1 : 1))
   const recent = logs
     .filter((l) => l.status === 'approved' || l.status === 'rejected')
@@ -39,7 +43,8 @@ export default function JudgeQueue() {
       )}
 
       {queue.map((log) => (
-        <ReviewCard key={log.id} log={log} member={memberOf(log.userId)} reqs={reqsFor(log.userId)} day={dayOf(log)} />
+        <ReviewCard key={log.id} log={log} member={memberOf(log.userId)} reqs={reqsFor(log.userId)}
+          day={dayOf(log)} saved={isSaved(log)} />
       ))}
 
       {recent.length > 0 && (
@@ -61,7 +66,7 @@ export default function JudgeQueue() {
   )
 }
 
-function ReviewCard({ log, member, reqs, day }) {
+function ReviewCard({ log, member, reqs, day, saved }) {
   const { actions } = useApp()
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -88,6 +93,18 @@ function ReviewCard({ log, member, reqs, day }) {
         <span className="vs-name"><span className="vs-dot" style={{ background: member?.accent }} />{member?.displayName} · Day {day}</span>
         <span className="muted" style={{ fontSize: 12 }}>{log.logDate}</span>
       </div>
+
+      {/* A save request looks like a failed day, because it is one. Say so up
+          front so the referee judges it as a plea, not a completed day. */}
+      {saved && (
+        <div className="card" style={{ margin: '0 0 12px', padding: 12, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <Icon name="shield" size={16} />
+          <span className="muted" style={{ fontSize: 13 }}>
+            <b style={{ color: 'var(--text)' }}>Used their one save.</b> This day is short and won't pass on its own.
+            Approving it counts the day; rejecting it fails the day. Either way the save is spent.
+          </span>
+        </div>
+      )}
 
       <div className="proof-grid">
         {reqs.map((r) => {

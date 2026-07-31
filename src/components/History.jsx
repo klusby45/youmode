@@ -62,6 +62,11 @@ export default function History() {
         <span><i style={{ background: 'var(--green)' }} />Approved</span>
         <span><i style={{ background: 'var(--amber)' }} />Awaiting referee</span>
         <span><i style={{ background: 'var(--red)' }} />Failed</span>
+        {/* Only shown once someone has actually spent a save — no point
+            explaining a state nobody in this challenge is in. */}
+        {participants.some((p) => summaries[p.userId]?.excused > 0) && (
+          <span><i style={{ background: 'var(--blue)' }} />Saved</span>
+        )}
         <span><i style={{ background: 'var(--panel-3)', border: '1px solid var(--text)' }} />Today</span>
       </div>
 

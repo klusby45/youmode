@@ -159,9 +159,10 @@ export function monthlyProgress(reqs, logs, { startStr, dayNumber, totalDays }) 
 }
 
 // ── day state ─────────────────────────────────────────────────────────────
-//   'upcoming' | 'active' | 'pending' | 'approved' | 'fail'
+//   'upcoming' | 'active' | 'pending' | 'approved' | 'excused' | 'fail'
 // hasReferee=false (honor mode): a complete day counts as approved.
-export function dayState(n, { startStr, todayStr, totalDays, logsByDate, reqs, hasReferee }) {
+// redemptionDate is the ONE day this member spent their save on (or null).
+export function dayState(n, { startStr, todayStr, totalDays, logsByDate, reqs, hasReferee, redemptionDate }) {
   if (n < 1 || n > totalDays) return 'upcoming'
   const date = dayDate(startStr, n)
   const log = logsByDate[date]
@@ -173,6 +174,11 @@ export function dayState(n, { startStr, todayStr, totalDays, logsByDate, reqs, h
   if (log?.status === 'approved') return 'approved'
   if (log?.status === 'rejected') return 'fail'
   if (complete) return hasReferee ? 'pending' : 'approved'
+  // The one save: an incomplete past day the member redeemed doesn't auto-fail.
+  // With a referee it waits on their verdict (approve -> 'approved' above,
+  // reject -> 'fail' above, so their call always wins). On the honor system
+  // there's nobody to ask, so it's 'excused': not a fail, not a day passed.
+  if (cmp < 0 && redemptionDate && date === redemptionDate) return hasReferee ? 'pending' : 'excused'
   return cmp === 0 ? 'active' : 'fail'
 }
 
@@ -189,25 +195,32 @@ export function summarize(member, reqs, logs, config) {
   const started = dayNum >= 1
   const finished = dayNum > totalDays
 
-  let approved = 0, failed = 0, pending = 0
+  // The one save the member spent, if any (see dayState).
+  const redemptionDate = member?.redemptionDate || null
+
+  let approved = 0, failed = 0, pending = 0, excused = 0
   const states = []
   for (let n = 1; n <= totalDays; n++) {
-    const s = dayState(n, { startStr, todayStr, totalDays, logsByDate, reqs, hasReferee })
+    const s = dayState(n, { startStr, todayStr, totalDays, logsByDate, reqs, hasReferee, redemptionDate })
     states[n] = s
     if (s === 'approved') approved++
     else if (s === 'fail') failed++
     else if (s === 'pending') pending++
+    else if (s === 'excused') excused++
   }
 
+  // An excused day doesn't extend a streak (nothing was done) but it doesn't
+  // break it either — that's the whole point of the save. Skip over it.
   let streak = 0
   for (let n = Math.min(totalDays, dayNum - 1); n >= 1; n--) {
     if (states[n] === 'approved') streak++
+    else if (states[n] === 'excused') continue
     else break
   }
   let best = 0, run = 0
   for (let n = 1; n <= totalDays; n++) {
     if (states[n] === 'approved') { run++; best = Math.max(best, run) }
-    else run = 0
+    else if (states[n] !== 'excused') run = 0
   }
 
   return {
@@ -222,6 +235,8 @@ export function summarize(member, reqs, logs, config) {
     approved,
     failed,
     pending,
+    excused,
+    redemptionDate,
     streak,
     bestStreak: best,
     forfeitTriggered: failed > 0,

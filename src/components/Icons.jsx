@@ -13,6 +13,7 @@ const P = {
   trophy: <><path d="M7 4h10v4a5 5 0 01-10 0z" /><path d="M7 6H4v1a3 3 0 003 3M17 6h3v1a3 3 0 01-3 3" /><path d="M12 13v4M9 20h6M10 17h4" /></>,
   gavel: <><path d="M14 3l7 7-2.5 2.5L11.5 5.5z" /><path d="M9 8l4 4-6 6-4-4z" /><path d="M3 21h8" /></>,
   clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>,
+  shield: <><path d="M12 3l7 3v6c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6z" /><path d="M9 12l2 2 4-4" /></>,
   plus: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
   minus: <path d="M5 12h14" />,
   logout: <><path d="M14 4h4a1 1 0 011 1v14a1 1 0 01-1 1h-4" /><path d="M10 12h9M16 9l3 3-3 3" /></>,

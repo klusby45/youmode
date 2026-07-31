@@ -214,7 +214,7 @@ export default function App() {
     refresh, signOut, switchChallenge,
     uploadProof: api.uploadProof, clearPhotos: api.clearPhotos, setChecked: api.setChecked, setCheckCount: api.setCheckCount,
     saveCaption: api.saveCaption, estimateMeal: api.estimateMeal, logMealCaption: api.logMealCaption, addWeighIn: api.addWeighIn,
-    dismissAiFlag: api.dismissAiFlag, reviewDay: api.reviewDay,
+    dismissAiFlag: api.dismissAiFlag, reviewDay: api.reviewDay, useRedemption: api.useRedemption,
     updateMyMember: api.updateMyMember, renameChallenge: api.renameChallenge, signedUrl: api.signedUrl,
     setReqPrivacy: api.setReqPrivacy,
   }), [refresh, signOut, switchChallenge])
@@ -947,6 +947,16 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .cal-cell.pending{background:color-mix(in srgb,var(--amber) 85%,transparent);color:var(--on-amber);border-color:transparent;font-weight:600}
 .cal-cell.fail{background:color-mix(in srgb,var(--red) 85%,transparent);color:var(--on-red);border-color:transparent;font-weight:600}
 .cal-cell.active{border-color:var(--text);color:var(--text);font-weight:600}
+/* Redeemed day: clearly not a pass, clearly not a fail. Outlined rather than
+   filled so it reads as "held" instead of "earned". */
+.cal-cell.excused{background:color-mix(in srgb,var(--blue) 16%,transparent);
+  border-color:color-mix(in srgb,var(--blue) 60%,transparent);color:var(--text);font-weight:600}
+/* The one-save offer on a failed day. */
+.save-offer{display:flex;align-items:center;gap:12px;width:100%;text-align:left;margin-bottom:12px;
+  padding:13px 14px;cursor:pointer;border-color:color-mix(in srgb,var(--blue) 45%,transparent)}
+.save-offer .so-txt{flex:1;display:flex;flex-direction:column;gap:2px}
+.save-offer .so-txt b{font-size:14px}
+.save-offer .so-txt small{color:var(--muted);font-size:12px;line-height:1.35}
 .cal-cell.today::after{content:'';position:absolute;bottom:3px;width:4px;height:4px;border-radius:50%;background:currentColor}
 .cal-cell.add{border:1px dashed var(--line-2);color:var(--muted);cursor:pointer;background:transparent}
 .cal-cell.add:active{color:var(--green);border-color:var(--green)}
