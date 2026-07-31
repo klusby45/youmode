@@ -3,7 +3,7 @@ import { useApp } from '../appContext.js'
 import { isMealReq } from '../config.js'
 import { isExtraMeal } from '../data.js'
 import { canSeePhotos } from '../lib/privacy.js'
-import { dayState, logDone, logTotal, entrySatisfies, mealProgress, addDays, canEditDay } from '../lib/challenge.js'
+import { dayState, logDone, logTotal, entrySatisfies, mealProgress, daysBetween, canEditDay, SAVE_WINDOW_DAYS } from '../lib/challenge.js'
 import Icon from './Icons.jsx'
 import ProofImage from './ProofImage.jsx'
 import Sheet from './Sheet.jsx'
@@ -48,11 +48,15 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
     hasReferee: cfg.hasReferee,
     redemptionDate: ownerRedemption,
   })
-  // The one save: offered only on YOUR OWN failed day, only for yesterday
-  // (a save for a fresh miss, not a tool for rewriting old results), and only
-  // while you still have it. Spending it is irreversible, so UseSave confirms.
+  // The one save: offered only on YOUR OWN failed day, only while you still
+  // have it, and only within the last week. The window used to be yesterday
+  // alone, which was too tight to be usable — people don't notice a missed day
+  // until a day or two later, so the day they needed had already aged out
+  // (Dylen, 2026-07-31). A week covers noticing late while still refusing to
+  // reach back far enough to rewrite an old result in a stakes challenge.
+  const daysAgo = daysBetween(date, cfg.todayStr)
   const canSave = !!myMember && me.id === profile.userId && state === 'fail'
-    && !ownerRedemption && date === addDays(cfg.todayStr, -1)
+    && !ownerRedemption && daysAgo >= 1 && daysAgo <= SAVE_WINDOW_DAYS
   const chips = stateChip(t)
   const [chipCls, chipLabel, chipIcon] = chips[state] || chips.upcoming
   const total = logTotal(reqs)

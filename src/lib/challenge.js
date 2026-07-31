@@ -275,6 +275,11 @@ export function goalStatus(member, config) {
   }
 }
 
+// How far back the one save can reach. A week: long enough that noticing a
+// missed day late still leaves you a way out, short enough that it can't
+// rewrite an old result in a challenge someone has a stake on.
+export const SAVE_WINDOW_DAYS = 7
+
 // Same-day-only editing (prevents backfilling a past day to dodge a fail).
 // The ONE exception is the day you spent your save on: you've already paid for
 // it, it's one per challenge, and a referee still rules on the result — so
