@@ -89,12 +89,15 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
   const secsRef = useRef(0) // interval-owned elapsed counter
   const pendingRef = useRef(0) // segments awaiting transcription
   const queueRef = useRef(Promise.resolve()) // serializes appends in speech order
+  const meterRef = useRef(null) // { ctx, raf } for the live input level
+  const auraRef = useRef(null) // the glow element the level drives
   const scrollRef = useRef(null)
   const rambleTaRef = useRef(null)
 
   // Stop any live recording + timer if the screen unmounts mid-capture.
   useEffect(() => () => {
     clearInterval(timerRef.current)
+    stopMeter() // leaving mid-take shouldn't strand an AudioContext
     try { if (recRef.current && recRef.current.state !== 'inactive') recRef.current.stop() } catch { /* already stopped */ }
     streamRef.current?.getTracks().forEach((t) => t.stop())
   }, [])
@@ -225,7 +228,49 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
   async function transcribeSeg(blob) {
     const b64 = await blobToBase64(blob)
     try { return (await api.transcribeAudio(b64, blob.type)).text }
-    catch { return (await api.transcribeAudio(b64, blob.type)).text } // one retry
+    catch {
+      // Breathe before retrying: an immediate second call during a network
+      // blip just fails again and costs the segment.
+      await new Promise((r) => setTimeout(r, 700))
+      return (await api.transcribeAudio(b64, blob.type)).text
+    }
+  }
+
+  // Live input level, straight off the mic stream, so the glow answers her
+  // voice instead of a fixed timer. Without this she talks for three minutes
+  // at a decorative animation with no evidence anything is listening.
+  function startMeter(stream) {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext
+      if (!Ctx) return
+      const ctx = new Ctx()
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 512
+      ctx.createMediaStreamSource(stream).connect(analyser)
+      const data = new Uint8Array(analyser.fftSize)
+      let smooth = 0
+      const tick = () => {
+        analyser.getByteTimeDomainData(data)
+        let peak = 0
+        for (let i = 0; i < data.length; i++) {
+          const d = Math.abs(data[i] - 128) / 128
+          if (d > peak) peak = d
+        }
+        smooth = smooth * 0.75 + Math.min(1, peak * 2.4) * 0.25
+        auraRef.current?.style.setProperty('--lvl', smooth.toFixed(3))
+        meterRef.current = { ctx, raf: requestAnimationFrame(tick) }
+      }
+      meterRef.current = { ctx, raf: requestAnimationFrame(tick) }
+    } catch { /* the meter is a nicety; recording works without it */ }
+  }
+  function stopMeter() {
+    const m = meterRef.current
+    if (!m) return
+    cancelAnimationFrame(m.raf)
+    m.ctx?.close?.().catch(() => {})
+    meterRef.current = null
+    auraRef.current?.style.setProperty('--lvl', '0')
   }
 
   // Transcriptions run through a promise chain so text always lands in the
@@ -267,6 +312,7 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
+      startMeter(stream)
       discardRef.current = false
       bufRef.current = ''
       liveRef.current = true
@@ -300,6 +346,7 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
 
   function stopRec() {
     clearInterval(timerRef.current)
+    stopMeter()
     liveRef.current = false
     const rec = recRef.current
     if (rec && rec.state !== 'inactive') { try { rec.stop() } catch { /* already stopped */ } }
@@ -384,7 +431,8 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
             {recState !== 'idle' && (
               // Breathing sunrise aura behind the mic while listening; it
               // quickens while we write the words down. Pure CSS, GPU-cheap.
-              <div className={'oc-aura' + (recState === 'transcribing' ? ' thinking' : '')} aria-hidden="true"><i /><i /></div>
+              <div ref={auraRef} aria-hidden="true"
+                className={'oc-aura' + (recState === 'transcribing' ? ' thinking' : ' live')}><i /><i /></div>
             )}
             <h2 className="au-q" style={{ textAlign: 'center' }}>What do you want to accomplish?</h2>
             <p className="center muted onb-sub-lg" style={{ maxWidth: 360, margin: '10px auto 0' }}>Tell me what you want to do. Ramble if you want. I'll turn it into a challenge.</p>
@@ -393,14 +441,21 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
               <div className="oc-mic-row">
                 {recState === 'transcribing' ? (
                   <>
-                    <button className="oc-mic" disabled><Icon name="bolt" size={30} /></button>
-                    <span className="oc-mic-hint oc-hint-busy">Hearing you out…</span>
+                    {/* A pencil, because that is literally what is happening.
+                        The old lightning bolt meant nothing here. */}
+                    <button className="oc-mic" disabled><Icon name="edit" size={28} /></button>
+                    <span className="oc-mic-hint oc-hint-busy">Writing it down…</span>
                   </>
                 ) : recState === 'recording' ? (
                   <>
                     <button className="oc-mic rec" onClick={stopRec} aria-label="Stop recording"><Icon name="stop" size={26} /></button>
                     <span className="oc-timer">{mmss}</span>
-                    <span className="oc-mic-hint">Take your time. Up to 10 minutes.</span>
+                    {/* Never let the 10-minute cutoff arrive unannounced. */}
+                    <span className={'oc-mic-hint' + (elapsed >= MAX_SECS - 60 ? ' oc-hint-busy' : '')}>
+                      {elapsed >= MAX_SECS - 60
+                        ? `${Math.max(1, Math.ceil((MAX_SECS - elapsed) / 60))} minute left. Tap to finish.`
+                        : 'Take your time. Up to 10 minutes.'}
+                    </span>
                     <button className="oc-cancel" onClick={cancelRec}>Discard</button>
                   </>
                 ) : (
@@ -437,7 +492,7 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
               <textarea value={input} rows={2} placeholder="Type your answer…" disabled={busy}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
-              <button className="btn btn-accent oc-send" disabled={busy || !input.trim()} onClick={send} aria-label="Send"><Icon name="bolt" size={18} /></button>
+              <button className="btn btn-accent oc-send" disabled={busy || !input.trim()} onClick={send} aria-label="Send"><Icon name="chevron" size={18} /></button>
             </div>
             <button className="auth-flip" onClick={() => setManual(true)}>Prefer to set it up yourself?</button>
           </>

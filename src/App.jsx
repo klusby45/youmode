@@ -1390,10 +1390,18 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .oc-aura i:nth-child(2){width:min(115vw,520px);animation-delay:-1.7s;
   background:radial-gradient(circle, color-mix(in srgb,var(--sun-amber) 18%,transparent) 0%, transparent 60%)}
 .oc-aura.thinking i{animation-duration:1.7s}
+/* While the mic is live the glow is driven by --lvl (real input level from an
+   AnalyserNode), not a timer, so it visibly answers her voice. Falls back to
+   the breathing keyframe if the meter never starts (--lvl stays 0). */
+.oc-aura.live i{animation:none;
+  transform:translate(-50%,-50%) scale(calc(.84 + var(--lvl,.06) * .6));
+  opacity:calc(.5 + var(--lvl,.06) * .5);
+  transition:transform .1s ease-out,opacity .1s ease-out}
 @keyframes aura-in{from{opacity:0}to{opacity:1}}
 @keyframes aura-breathe{0%,100%{transform:translate(-50%,-50%) scale(.88);opacity:.55}
   50%{transform:translate(-50%,-50%) scale(1.14);opacity:1}}
-@media (prefers-reduced-motion: reduce){.oc-aura i{animation:none;opacity:.7}.oc-hint-busy{animation:none}}
+@media (prefers-reduced-motion: reduce){.oc-aura i{animation:none;opacity:.7}.oc-hint-busy{animation:none}
+  .oc-aura.live i{transform:translate(-50%,-50%) scale(1);opacity:.7;transition:none}}
 .oc-timer{font-family:var(--cond);font-weight:600;font-size:16px;letter-spacing:1px;color:var(--sun-text)}
 .oc-cancel{background:none;border:none;color:var(--sun-muted);font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .oc-chatbar{display:flex;gap:8px;align-items:flex-end}
