@@ -263,7 +263,7 @@ function BodyGoalCard({ plan, name, accent, showWeighIn = true }) {
             <TrendLine points={points} start={plan.startWeight} target={plan.targetWeight} accent={accent} uid={plan.id} />
           </>
         ) : (
-          <div className="bg-hint" style={{ marginTop: 10 }}>progress kept private — {name} still sees it daily</div>
+          <div className="bg-hint" style={{ marginTop: 10 }}>progress kept private. {name} still sees it daily</div>
         )}
 
         {mine && showWeighIn && (

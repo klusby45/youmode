@@ -67,7 +67,7 @@ export default function GoalCoach({ onClose }) {
       setMsgs((xs) => [...xs, { role: 'assistant', content: reply }])
       if (p) setProposal(p)
     } catch {
-      setErr("Couldn't reach the coach — check your connection and resend.")
+      setErr("Couldn't reach the coach. Check your connection and resend.")
       setMsgs(next) // keep the user's message so they can retry
     } finally {
       setBusy(false)

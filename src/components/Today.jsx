@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../appContext.js'
 import { isMealReq } from '../config.js'
-import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, checkCount, weeklyProgress, monthlyProgress, mealProgress } from '../lib/challenge.js'
+import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, checkCount, weeklyProgress, monthlyProgress, mealProgress, SAVE_WINDOW_DAYS } from '../lib/challenge.js'
 import { IS_MOBILE } from '../lib/device.js'
 import { tapHaptic } from '../lib/native.js'
 import * as api from '../data.js'
@@ -11,7 +11,7 @@ import Sheet from './Sheet.jsx'
 import DayComplete from './DayComplete.jsx'
 
 export default function Today() {
-  const { cfg, me, logs, reqsFor, actions, challenge, daysFor, myPlan, t, mode, summaries } = useApp()
+  const { cfg, me, logs, reqsFor, actions, challenge, daysFor, myPlan, t, mode, summaries, myMember } = useApp()
   const myDays = daysFor(me.id)
   const [uploading, setUploading] = useState(null)
   const [saving, setSaving] = useState(null) // requirement id of an in-flight check
@@ -71,7 +71,7 @@ export default function Today() {
       await actions.uploadProof(challenge.id, me.id, cfg.todayStr, req, file, log?.entriesByReq?.[req.id])
       await actions.refresh()
     } catch {
-      setSaveErr(`"${req.label}" photo didn't save — check your connection and try again.`)
+      setSaveErr(`"${req.label}" photo didn't save. Check your connection and try again.`)
     } finally {
       setUploading(null)
     }
@@ -83,7 +83,7 @@ export default function Today() {
       await actions.clearPhotos(challenge.id, me.id, cfg.todayStr, req)
       await actions.refresh()
     } catch {
-      setSaveErr(`Couldn't clear "${req.label}" — check your connection and try again.`)
+      setSaveErr(`Couldn't clear "${req.label}". Check your connection and try again.`)
     }
   }
 
@@ -97,7 +97,7 @@ export default function Today() {
       tapHaptic()
       await actions.refresh()
     } catch {
-      setSaveErr(`"${req.label}" didn't save — check your connection and tap it again.`)
+      setSaveErr(`"${req.label}" didn't save. Check your connection and tap it again.`)
     } finally {
       setSaving(null)
     }
@@ -123,7 +123,7 @@ export default function Today() {
       tapHaptic()
       await actions.refresh()
     } catch {
-      setSaveErr(`"${req.label}" didn't save — check your connection and tap it again.`)
+      setSaveErr(`"${req.label}" didn't save. Check your connection and tap it again.`)
     } finally {
       setSaving(null)
     }
@@ -162,6 +162,16 @@ export default function Today() {
   // the day asks for, a leftover empty "Meal 2" box is just anxiety — the meal
   // duty is already done, in whatever order the food actually happened. Drop
   // the unfilled numbered slots then, the way filled-only extras already work.
+  // A save nobody can find may as well not exist (Dylen went looking and
+  // concluded it wasn't there). Surface the most recent still-saveable day
+  // right where people actually look, and say nothing when there isn't one.
+  const myS = summaries[me.id]
+  let saveDay = null
+  if (myMember && !myMember.redemptionDate && myS) {
+    for (let n = dayNum - 1; n >= Math.max(1, dayNum - SAVE_WINDOW_DAYS); n--) {
+      if (myS.states[n] === 'fail') { saveDay = n; break }
+    }
+  }
   const mealPool = mealProgress(reqs, log)
   const mealSlotDone = (r) => mealPool.met && isMealReq(r) && !r.optional && !isFilled(r)
   const photos = reqs.filter((r) => r.kind === 'photo' && daily(r)
@@ -229,6 +239,14 @@ export default function Today() {
             {meals.length ? 'estimates from your photos + captions' : 'add captions to start counting'}
           </div>
         </div>
+      )}
+
+      {saveDay && (
+        <button className="save-nudge" onClick={() => actions.goTo('history')}>
+          <Icon name="shield" size={16} />
+          <span className="sn-txt">Day {saveDay} can still be saved</span>
+          <Icon name="chevron" size={14} />
+        </button>
       )}
 
       {saveErr && (
@@ -375,7 +393,7 @@ export default function Today() {
       )}
 
       {!editable && !approved && (
-        <p className="center muted" style={{ fontSize: 12, marginTop: 16 }}>This day is locked — you can only log proof on the current day.</p>
+        <p className="center muted" style={{ fontSize: 12, marginTop: 16 }}>You can only log proof on the current day.</p>
       )}
 
       {celebrate && (

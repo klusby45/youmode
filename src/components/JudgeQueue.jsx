@@ -104,17 +104,8 @@ function ReviewCard({ log, member, reqs, day, saved }) {
         <div className="card" style={{ margin: '0 0 12px', padding: 12, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
           <Icon name="shield" size={16} />
           <span className="muted" style={{ fontSize: 13 }}>
-            {lateProof ? (
-              <>
-                <b style={{ color: 'var(--text)' }}>Used their one save, then logged this day late.</b> The proof below was
-                added after the day ended, so it's their word that it happened on the day. Your call.
-              </>
-            ) : (
-              <>
-                <b style={{ color: 'var(--text)' }}>Used their one save.</b> This day is short and won't pass on its own.
-              </>
-            )}
-            {' '}Approving it counts the day; rejecting it fails the day. Either way the save is spent.
+            <b style={{ color: 'var(--text)' }}>Used their one save.</b>{' '}
+            {lateProof ? 'Logged after the day ended.' : 'Nothing logged.'} Your call.
           </span>
         </div>
       )}

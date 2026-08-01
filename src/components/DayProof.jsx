@@ -103,7 +103,7 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
     try {
       await actions.uploadProof(challenge.id, me.id, date, req, file, log?.entriesByReq?.[req.id])
       await actions.refresh()
-    } catch { setSaveErr(`"${req.label}" photo didn't save — try again.`) }
+    } catch { setSaveErr(`"${req.label}" photo didn't save. Try again.`) }
     finally { setUploading(null) }
   }
   async function onClearLate(req) {
@@ -111,7 +111,7 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
     try {
       await actions.clearPhotos(challenge.id, me.id, date, req)
       await actions.refresh()
-    } catch { setSaveErr("Couldn't remove that photo — try again.") }
+    } catch { setSaveErr("Couldn't remove that photo. Try again.") }
     finally { setUploading(null) }
   }
   async function onToggleLate(req) {
@@ -120,7 +120,7 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
     try {
       await actions.setChecked(challenge.id, me.id, date, req, !on)
       await actions.refresh()
-    } catch { setSaveErr(`"${req.label}" didn't save — try again.`) }
+    } catch { setSaveErr(`"${req.label}" didn't save. Try again.`) }
   }
 
   async function onPickMeal(req, file) {
@@ -129,13 +129,13 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
     try {
       await actions.uploadProof(challenge.id, me.id, date, req, file, log?.entriesByReq?.[req.id])
       await actions.refresh()
-    } catch { setSaveErr(`"${req.label}" photo didn't save — try again.`) }
+    } catch { setSaveErr(`"${req.label}" photo didn't save. Try again.`) }
     finally { setUploading(null) }
   }
   async function onClearMeal(req) {
     setSaveErr(null)
     try { await actions.clearPhotos(challenge.id, me.id, date, req); await actions.refresh() }
-    catch { setSaveErr(`Couldn't clear "${req.label}" — try again.`) }
+    catch { setSaveErr(`Couldn't clear "${req.label}". Try again.`) }
   }
 
   // Fuel summary — only if this member has a body plan and logged meals with
@@ -166,9 +166,7 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
         <>
           <div className="section-label" style={{ marginTop: 2 }}>Add what you missed</div>
           <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
-            {cfg.hasReferee
-              ? 'You used your save on this day, so you can still log it. It goes to the referee marked as added after the fact.'
-              : 'You used your save on this day, so you can still log it. The day stays saved either way.'}
+            {cfg.hasReferee ? 'The referee sees these were added late.' : 'The day stays saved either way.'}
           </p>
           <div className="slots-grid">
             {lateReqs.filter((r) => r.kind === 'photo').map((r) => (
@@ -326,7 +324,7 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
                 : (await actions.logMealCaption(challenge.id, me.id, date, req, text)).id
               await actions.refresh()
               if (text.trim()) { await actions.estimateMeal(eid); await actions.refresh() }
-            } catch { setSaveErr(`Couldn't update "${req.label}" — try again.`) }
+            } catch { setSaveErr(`Couldn't update "${req.label}". Try again.`) }
           }}
           onClose={() => setCaptioning(null)} />
       )}
@@ -347,7 +345,7 @@ function UseSave({ date, memberId, hasReferee, onDone, useRedemption }) {
         <Icon name="shield" size={17} />
         <span className="so-txt">
           <b>Use your one save</b>
-          <small>{hasReferee ? 'Send this day to the referee instead of a fail.' : 'Keep this day from failing. You only get one.'}</small>
+          <small>One per challenge.</small>
         </span>
         <Icon name="chevron" size={15} />
       </button>
@@ -357,8 +355,8 @@ function UseSave({ date, memberId, hasReferee, onDone, useRedemption }) {
     <div className="card" style={{ marginBottom: 12, padding: 14 }}>
       <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>
         {hasReferee
-          ? 'This sends the day to the referee to decide. They can still say no, and either way the save is gone for the rest of the challenge.'
-          : "This day stops counting as a fail and your streak keeps going. It won't count as a day you passed. One per challenge."}
+          ? 'The referee decides. Spent either way.'
+          : "No fail, streak intact. Won't count as passed."}
       </p>
       {err && <div className="login-err" style={{ textAlign: 'left', marginBottom: 10 }}>{err}</div>}
       <div className="review-actions">

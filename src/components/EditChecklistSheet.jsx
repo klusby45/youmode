@@ -54,13 +54,13 @@ export default function EditChecklistSheet({ reqs, onSave, onClose }) {
             minMinutes: p.minMinutes ?? old?.minMinutes ?? null,
           }
         }))
-        setAiNote("Here's the updated list — look it over, tweak anything, then save.")
+        setAiNote("Here's the updated list. Look it over, tweak anything, then save.")
         setAiText('')
       } else {
-        setAiNote(reply || 'The guide needs a bit more detail — try describing the change differently.')
+        setAiNote(reply || 'The guide needs a bit more detail. Try describing the change differently.')
       }
     } catch {
-      setAiNote("Couldn't reach the guide — check your connection and try again.")
+      setAiNote("Couldn't reach the guide. Check your connection and try again.")
     } finally {
       setAiBusy(false)
     }

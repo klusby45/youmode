@@ -103,7 +103,7 @@ function AddDays({ current, memberId, cfg, t, refresh, update, onClose }) {
       await refresh()
       onClose()
     } catch (e) {
-      setErr(/total_days/.test(e.message || '') ? 'This feature needs a quick server update — ping Kyle.' : e.message)
+      setErr(/total_days/.test(e.message || '') ? 'This feature needs a quick server update. Ping Kyle.' : e.message)
       setBusy(false)
     }
   }

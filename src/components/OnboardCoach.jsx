@@ -387,7 +387,7 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
               <div className={'oc-aura' + (recState === 'transcribing' ? ' thinking' : '')} aria-hidden="true"><i /><i /></div>
             )}
             <h2 className="au-q" style={{ textAlign: 'center' }}>What do you want to accomplish?</h2>
-            <p className="center muted onb-sub-lg" style={{ maxWidth: 360, margin: '10px auto 0' }}>Tell me your goals, feel free to ramble, and I'll help structure it and turn it into a challenge.</p>
+            <p className="center muted onb-sub-lg" style={{ maxWidth: 360, margin: '10px auto 0' }}>Tell me what you want to do. Ramble if you want. I'll turn it into a challenge.</p>
 
             {micSupported && !micDenied && (
               <div className="oc-mic-row">

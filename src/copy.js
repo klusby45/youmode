@@ -20,7 +20,7 @@ export function storeTone(k) {
 }
 
 // Entries: plain string, or (vars) => string for interpolated copy.
-// (Logged-out surfaces — landing, auth, guided start — use fixed brand copy
+// (Logged-out surfaces, landing, auth, guided start, use fixed brand copy
 // in their components; voices apply in-app only, after the user picks one.)
 const C = {
   // ── onboarding ──
@@ -35,9 +35,9 @@ const C = {
     monk: 'Choose your daily practices, invite your people, and begin.',
   },
   'onboard.join.sub': {
-    hardcore: 'Got an invite code from a friend? Jump into their challenge as a competitor — or as the referee.',
-    coach: 'Got an invite code from a friend? Jump into their challenge — or join as the referee.',
-    monk: 'Someone shared a code? Join them on the path — or watch over the days as referee.',
+    hardcore: 'Got an invite code from a friend? Jump into their challenge as a competitor, or as the referee.',
+    coach: 'Got an invite code from a friend? Jump into their challenge, or join as the referee.',
+    monk: 'Someone shared a code? Join them on the path, or watch over the days as referee.',
   },
   'onboard.stake.label': {
     hardcore: 'On the line (optional)',
@@ -60,14 +60,14 @@ const C = {
     monk: 'It begins. 🌱',
   },
   'onboard.done.sub': {
-    hardcore: 'Share this code so friends can join — up to 3 more doing the challenge, plus one referee to judge the days.',
-    coach: 'Share this code so friends can join — teammates doing the challenge, plus one referee to make the calls.',
-    monk: 'Share this code with your people — companions for the road, and one referee to witness the days.',
+    hardcore: 'Share this code so friends can join, up to 3 more doing the challenge, plus one referee to judge the days.',
+    coach: 'Share this code so friends can join, teammates doing the challenge, plus one referee to make the calls.',
+    monk: 'Share this code with your people, companions for the road, and one referee to witness the days.',
   },
   'onboard.done.honor': {
-    hardcore: 'No referee? No problem — finished days count automatically, with AI spot-checks keeping the photos honest.',
-    coach: 'No referee? No problem — finished days count automatically, with AI spot-checks keeping photos honest.',
-    monk: "No referee? That's okay — finished days count on their own, with a gentle AI eye on the photos.",
+    hardcore: 'No referee? No problem. Finished days count automatically, with AI spot-checks keeping the photos honest.',
+    coach: 'No referee? No problem. Finished days count automatically, with AI spot-checks keeping photos honest.',
+    monk: "No referee? That's okay. Finished days count on their own, with a gentle AI eye on the photos.",
   },
 
   // ── today ──
@@ -100,7 +100,7 @@ const C = {
   },
   'today.banner.rejected.sub': {
     hardcore: ({ note }) => (note ? `“${note}”` : 'This counts as a fail.'),
-    coach: ({ note }) => (note ? `“${note}”` : "It counts as a miss. Tomorrow's a clean slate — take it."),
+    coach: ({ note }) => (note ? `“${note}”` : "It counts as a miss. Tomorrow's a clean slate, take it."),
     monk: ({ note }) => (note ? `“${note}”` : "It didn't count. The next one can."),
   },
   'today.banner.review.title': {
@@ -108,8 +108,8 @@ const C = {
     monk: 'With the referee now',
   },
   'today.banner.review.sub': {
-    hardcore: 'All proof in — awaiting the verdict.',
-    coach: 'All proof in — waiting on the call.',
+    hardcore: 'All proof in, awaiting the verdict.',
+    coach: 'All proof in, waiting on the call.',
     monk: 'Everything is in. Now we wait.',
   },
   'today.banner.done.title': {
@@ -117,7 +117,7 @@ const C = {
   },
   'today.banner.done.sub': {
     hardcore: "Everything's in. See you tomorrow.",
-    coach: "Everything's in. Nice work — see you tomorrow.",
+    coach: "Everything's in. Nice work, see you tomorrow.",
     monk: 'Everything is in. Rest now.',
   },
   'today.banner.togo.title': {
@@ -125,7 +125,7 @@ const C = {
   },
   'today.banner.togo.sub': {
     hardcore: ({ total }) => `Finish all ${total} before midnight or it's a fail.`,
-    coach: ({ total }) => `All ${total} in before midnight — you've got this.`,
+    coach: ({ total }) => `All ${total} in before midnight, you've got this.`,
     monk: ({ total }) => `${total} pieces of today remain. There is still time.`,
   },
   // Soft-mode hero (Linen layout): the line under the big progress ring.
@@ -189,8 +189,8 @@ const C = {
     hardcore: ({ name }) => `${name} is officiating`,
   },
   'standings.ref.sub': {
-    hardcore: 'Every day is their call — pass or fail, no appeals.',
-    coach: 'They review every day — honest calls keep this fair for everyone.',
+    hardcore: 'Every day is their call. Pass or fail, no appeals.',
+    coach: 'They review every day. Honest calls keep this fair for everyone.',
     monk: 'Each day passes through their hands. Trust the process.',
   },
   'standings.honor.title': { hardcore: 'Honor system · AI spot checks' },
@@ -216,8 +216,8 @@ const C = {
     monk: ({ name }) => `If ${name} falls short:`,
   },
   'stake.due': {
-    hardcore: ({ n }) => `Forfeit due — ${n} fail${n > 1 ? 's' : ''}`,
-    coach: ({ n }) => `Stake due — ${n} miss${n > 1 ? 'es' : ''}`,
+    hardcore: ({ n }) => `Forfeit due · ${n} fail${n > 1 ? 's' : ''}`,
+    coach: ({ n }) => `Stake due · ${n} miss${n > 1 ? 'es' : ''}`,
     monk: () => 'The promise comes due',
   },
   'stake.safe': {
@@ -246,9 +246,9 @@ const C = {
     monk: 'The Path',
   },
   'history.extend.sub': {
-    hardcore: "Adding days only makes the mountain taller — extensions can't be undone below your current day.",
-    coach: 'Extensions are one-way — you can add days, not remove them.',
-    monk: 'The path only grows longer — added days cannot be taken back.',
+    hardcore: "Adding days only makes the mountain taller, extensions can't be undone below your current day.",
+    coach: 'Extensions are one-way. You can add days, not remove them.',
+    monk: 'The path only grows longer, added days cannot be taken back.',
   },
 
   // ── goals ──
@@ -262,13 +262,13 @@ const C = {
     monk: 'optional goals · tended daily, harvested in time',
   },
   'coach.greeting.new': {
-    hardcore: "What are you trying to achieve? Tell me like you'd tell a friend — the goal, where you're at now, and your deadline. I'll push back if the math doesn't work, then we lock in a plan.",
+    hardcore: "What are you trying to achieve? Tell me like you'd tell a friend, the goal, where you're at now, and your deadline. I'll push back if the math doesn't work, then we lock in a plan.",
     coach: "What are you trying to achieve? Tell me the goal, where you're at now, and your deadline. I'll be straight with you about the math, then we set a plan.",
     monk: "What are you working toward? Tell me the goal, where you are today, and when you hope to arrive. We'll shape a plan that honors both ambition and patience.",
   },
   'coach.greeting.more': {
-    hardcore: "What's next? You can add another goal alongside what you've got, or rework an existing one — tell me what you're after.",
-    monk: "What's next on the path? We can add another goal or reshape one you have — tell me where you want to go.",
+    hardcore: "What's next? You can add another goal alongside what you've got, or rework an existing one, tell me what you're after.",
+    monk: "What's next on the path? We can add another goal or reshape one you have, tell me where you want to go.",
   },
 
   // ── referee ──
@@ -306,8 +306,8 @@ const C = {
     monk: 'Two paths, one start line.',
   },
   'format.accountability.blurb': {
-    hardcore: 'Different goals, same commitment — you keep each other honest.',
-    monk: 'Different goals, walked together — you keep each other going.',
+    hardcore: 'Different goals, same commitment, you keep each other honest.',
+    monk: 'Different goals, walked together, you keep each other going.',
   },
   'format.community.blurb': {
     hardcore: 'A crew of up to 12, everyone running their own checklist.',

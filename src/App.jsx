@@ -215,6 +215,7 @@ export default function App() {
     uploadProof: api.uploadProof, clearPhotos: api.clearPhotos, setChecked: api.setChecked, setCheckCount: api.setCheckCount,
     saveCaption: api.saveCaption, estimateMeal: api.estimateMeal, logMealCaption: api.logMealCaption, addWeighIn: api.addWeighIn,
     dismissAiFlag: api.dismissAiFlag, reviewDay: api.reviewDay, useRedemption: api.useRedemption,
+    goTo: setView, // lets a screen point at another tab (e.g. Today -> History)
     updateMyMember: api.updateMyMember, renameChallenge: api.renameChallenge, signedUrl: api.signedUrl,
     setReqPrivacy: api.setReqPrivacy,
   }), [refresh, signOut, switchChallenge])
@@ -951,6 +952,12 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
    filled so it reads as "held" instead of "earned". */
 .cal-cell.excused{background:color-mix(in srgb,var(--blue) 16%,transparent);
   border-color:color-mix(in srgb,var(--blue) 60%,transparent);color:var(--text);font-weight:600}
+/* Today nudge: a still-saveable day, pointed at from where people look. */
+.save-nudge{display:flex;align-items:center;gap:10px;width:100%;text-align:left;margin:12px 0 0;
+  padding:11px 14px;border-radius:var(--r-sm);cursor:pointer;color:var(--text);
+  background:color-mix(in srgb,var(--blue) 10%,transparent);
+  border:1px solid color-mix(in srgb,var(--blue) 40%,transparent)}
+.save-nudge .sn-txt{flex:1;font-size:13.5px}
 /* The one-save offer on a failed day. */
 .save-offer{display:flex;align-items:center;gap:12px;width:100%;text-align:left;margin-bottom:12px;
   padding:13px 14px;cursor:pointer;border-color:color-mix(in srgb,var(--blue) 45%,transparent)}
