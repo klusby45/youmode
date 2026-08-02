@@ -57,6 +57,10 @@ const nEntry = (r) => r && ({
   checked: r.checked, checkCount: r.check_count ?? null,
   aiFlag: r.ai_flag, aiNote: r.ai_note, aiDismissed: r.ai_dismissed,
   caption: r.caption ?? null, estProtein: r.est_protein ?? null, estCalories: r.est_calories ?? null,
+  // Full macro set (est_* columns land with supabase/macro-columns.sql).
+  // Undefined pre-migration, which reads the same as null everywhere.
+  estCarbs: r.est_carbs ?? null, estFat: r.est_fat ?? null,
+  estSatFat: r.est_sat_fat ?? null, estFiber: r.est_fiber ?? null,
 })
 const nPlan = (r) => r && ({
   id: r.id, userId: r.user_id, goalText: r.goal_text, startWeight: r.start_weight,

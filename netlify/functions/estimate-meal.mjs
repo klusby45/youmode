@@ -75,14 +75,16 @@ async function handle(req) {
           'You estimate nutrition from a meal photo and the eater\'s one-line description. ' +
           'The description is AUTHORITATIVE for what the meal is and the quantities. If it says "6 eggs", estimate 6 eggs even if the photo makes portions hard to judge. ' +
           'Use the photo only to fill in items the description omits and to catch wild mismatches (description says steak, photo shows salad, then estimate the photo). ' +
-          'Work it out step by step before answering. List every distinct food and ingredient on its own line with its own calories and protein, using realistic standard nutrition values (a large egg is about 75 cal and 6g protein; 1 tbsp oil or butter about 120 cal; 1 tbsp maple syrup about 50 cal; dry rolled oats about 150 cal per half cup). ' +
+          'Work it out step by step before answering. List every distinct food and ingredient on its own line with its own calories, protein, carbohydrate, total fat, SATURATED fat, and fiber, using realistic standard nutrition values. ' +
+          'Reference points: one large egg is about 75 cal, 6g protein, 5g fat, 1.6g saturated, 0g fiber. 1 tbsp butter about 120 cal and 7g saturated. 1 oz hard cheese about 9g fat and 6g saturated. 4 oz cooked chicken breast about 1g saturated. 4 oz fatty red meat (ribeye, lamb, kefta, birria) about 7 to 9g saturated. Dry rolled oats per half cup about 150 cal, 27g carb, 4g fiber. 1 tbsp chia about 5g fiber. Half a cup of cooked beans about 7g fiber. Half an avocado about 5g fiber. Coconut oil and movie-theater popcorn are unusually high in saturated fat. ' +
           'Include the easy-to-miss items so you do not undercount: cooking oil or butter, sauces, dressings, syrups, and nut butters. But keep every line realistic and do not inflate. Add every line up. ' +
-          'After the itemized list, output the totals as strict JSON on the final line, with nothing after it: {"protein_g": <int>, "calories": <int>}',
+          'Saturated fat and fiber matter most here, so reason about them explicitly for each line rather than guessing at the end. Saturated fat can never exceed total fat. ' +
+          'After the itemized list, output the totals as strict JSON on the final line, with nothing after it: {"protein_g": <int>, "calories": <int>, "carbs_g": <int>, "fat_g": <int>, "sat_fat_g": <int>, "fiber_g": <int>}',
         messages: [{
           role: 'user',
           content: [
             ...photoUrls.map((u) => ({ type: 'image', source: { type: 'url', url: u } })),
-            { type: 'text', text: `Meal: "${entry.requirements?.label || 'meal'}". Description: "${entry.caption || '(none — estimate from photo only)'}". Estimate protein (g) and calories.` },
+            { type: 'text', text: `Meal: "${entry.requirements?.label || 'meal'}". Description: "${entry.caption || '(none — estimate from photo only)'}". Estimate calories, protein, carbs, total fat, saturated fat, and fiber.` },
           ],
         }],
       }),
@@ -95,16 +97,35 @@ async function handle(req) {
     const objs = text.match(/\{[^{}]*\}/g) || []
     let est = {}
     try { est = JSON.parse(objs[objs.length - 1] || '{}') } catch { /* skip */ }
-    const protein = Number.isFinite(est.protein_g) ? Math.max(0, Math.min(300, Math.round(est.protein_g))) : null
-    const calories = Number.isFinite(est.calories) ? Math.max(0, Math.min(4000, Math.round(est.calories))) : null
+    const clamp = (v, hi) => (Number.isFinite(v) ? Math.max(0, Math.min(hi, Math.round(v))) : null)
+    const protein = clamp(est.protein_g, 300)
+    const calories = clamp(est.calories, 4000)
+    const carbs = clamp(est.carbs_g, 600)
+    const fat = clamp(est.fat_g, 300)
+    let satFat = clamp(est.sat_fat_g, 200)
+    const fiber = clamp(est.fiber_g, 100)
+    // Saturated fat is a subset of total fat; a model slip that violates that
+    // would quietly corrupt the one number a lipid panel cares most about.
+    if (satFat != null && fat != null && satFat > fat) satFat = fat
     if (protein == null && calories == null) return Response.json({ skipped: 'unparseable estimate' }, { status: 200 })
 
+    // New columns land in their own PATCH so a pre-migration database still
+    // stores protein and calories instead of failing the whole write.
     await fetch(`${SUPABASE_URL}/rest/v1/log_entries?id=eq.${entryId}`, {
       method: 'PATCH',
       headers: { ...svc, ...JSON_HEADERS, Prefer: 'return=minimal' },
       body: JSON.stringify({ est_protein: protein, est_calories: calories }),
     })
-    return Response.json({ ok: true, protein, calories })
+    let stored = false
+    if (carbs != null || fat != null || satFat != null || fiber != null) {
+      const ext = await fetch(`${SUPABASE_URL}/rest/v1/log_entries?id=eq.${entryId}`, {
+        method: 'PATCH',
+        headers: { ...svc, ...JSON_HEADERS, Prefer: 'return=minimal' },
+        body: JSON.stringify({ est_carbs: carbs, est_fat: fat, est_sat_fat: satFat, est_fiber: fiber }),
+      })
+      stored = ext.ok
+    }
+    return Response.json({ ok: true, protein, calories, carbs, fat, satFat, fiber, extendedStored: stored })
   } catch (e) {
     return Response.json({ skipped: String(e?.message || e) }, { status: 200 })
   }
