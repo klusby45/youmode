@@ -89,7 +89,7 @@ async function main() {
     challengeMeta.push({ name: ch.name, start: ch.start_date, total: m.total_days || ch.total_days, format: ch.format, days: days.length })
     for (const d of days) {
       const { data: es } = await sb.from('log_entries')
-        .select('requirement_id, photo_path, photo_paths, checked, caption, est_protein, est_calories')
+        .select('requirement_id, photo_path, photo_paths, checked, caption, est_protein, est_calories, updated_at')
         .eq('day_log_id', d.id)
       for (const e of es || []) {
         const r = byId[e.requirement_id]; if (!r) continue
@@ -97,7 +97,7 @@ async function main() {
           date: d.log_date, status: d.status, kind: r.kind, label: r.label, group: r.group_label,
           optional: r.optional,
           done: !!(e.photo_paths?.length || e.photo_path || e.checked),
-          caption: e.caption || null, protein: e.est_protein ?? null, calories: e.est_calories ?? null,
+          caption: e.caption || null, protein: e.est_protein ?? null, calories: e.est_calories ?? null, updated: e.updated_at || null,
         })
       }
     }
@@ -237,6 +237,68 @@ async function main() {
   const outMd = `/tmp/youmode-health-export-${username}-${today}.md`
   writeFileSync(outMd, md)
   console.log(outMd)
+
+  // ── daily + per-meal tables, in the schema a lab AI asked for ──────────
+  // One row per day is what a reasoning model wants: it can line intake up
+  // against workout load and a draw date. Columns we do not yet capture are
+  // written as `not_tracked` rather than guessed — a fabricated saturated-fat
+  // number is worse than an honest blank, because the model will act on it.
+  const tz = 'America/Los_Angeles'
+  const localTime = (iso8601) => new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(iso8601))
+
+  const isMealRow = (r) => /meal|shake|breakfast|lunch|dinner|snack|fuel/i.test(`${r.label} ${r.group || ''}`) || r.caption
+  const isWorkoutRow = (r) => /workout|run|lift|gym|cardio|train/i.test(`${r.label} ${r.group || ''}`)
+  const isWaterRow = (r) => /water|hydrat/i.test(r.label)
+
+  const dayRows = dates.map((d) => {
+    const onDay = rows.filter((r) => r.date === d)
+    const dayMeals = onDay.filter((r) => r.caption)
+    const kcal = dayMeals.reduce((a, m) => a + (m.calories || 0), 0)
+    const prot = dayMeals.reduce((a, m) => a + (m.protein || 0), 0)
+    // Timestamps record when an entry was WRITTEN. If every entry on a day
+    // shares the same minute it was a bulk backfill, not a lived timeline —
+    // emitting those as meal/workout times would invent a schedule that never
+    // happened, so blank them instead.
+    const stamps = onDay.map((r) => r.updated).filter(Boolean)
+    const minutes = new Set(stamps.map((s) => s.slice(0, 16)))
+    const timingReliable = stamps.length > 1 && minutes.size > 1
+    const mealTimes = timingReliable ? dayMeals.map((m) => m.updated).filter(Boolean).sort() : []
+    const workouts = timingReliable
+      ? onDay.filter((r) => isWorkoutRow(r) && r.done).map((r) => r.updated).filter(Boolean).sort() : []
+    const water = onDay.find((r) => isWaterRow(r))
+    return {
+      date: d,
+      calories: kcal || '',
+      protein_g: prot || '',
+      carbs_g: 'not_tracked', total_fat_g: 'not_tracked',
+      saturated_fat_g: 'not_tracked', fiber_g: 'not_tracked', sodium_mg: 'not_tracked',
+      alcohol_units: 0,
+      water_target_met: water ? (water.done ? 'yes' : 'no') : 'not_tracked',
+      meals_logged: dayMeals.length,
+      first_meal_local: mealTimes.length ? localTime(mealTimes[0]) : '',
+      last_meal_local: mealTimes.length ? localTime(mealTimes[mealTimes.length - 1]) : '',
+      workout_times_local: workouts.map(localTime).join(' '),
+    }
+  })
+  const dcols = Object.keys(dayRows[0])
+  const csv = [dcols.join(','), ...dayRows.map((r) => dcols.map((c) => String(r[c] ?? '')).join(','))].join('\n')
+  const outCsv = `/tmp/youmode-daily-${username}-${today}.csv`
+  writeFileSync(outCsv, csv)
+  console.log(outCsv)
+
+  const mealRows = meals.map((m) => ({
+    date: m.date, time_local: m.updated ? localTime(m.updated) : '',
+    calories: m.calories ?? '', protein_g: m.protein ?? '',
+    saturated_fat_g: 'not_tracked', fiber_g: 'not_tracked',
+    description: `"${m.caption.replace(/"/g, "'")}"`,
+  }))
+  const mcols = Object.keys(mealRows[0])
+  const mcsv = [mcols.join(','), ...mealRows.map((r) => mcols.map((c) => String(r[c] ?? '')).join(','))].join('\n')
+  const outMeals = `/tmp/youmode-meals-${username}-${today}.csv`
+  writeFileSync(outMeals, mcsv)
+  console.log(outMeals)
 
   if (wantJson) {
     const outJson = outMd.replace(/\.md$/, '.json')
