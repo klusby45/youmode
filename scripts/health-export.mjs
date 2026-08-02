@@ -89,7 +89,7 @@ async function main() {
     challengeMeta.push({ name: ch.name, start: ch.start_date, total: m.total_days || ch.total_days, format: ch.format, days: days.length })
     for (const d of days) {
       const { data: es } = await sb.from('log_entries')
-        .select('requirement_id, photo_path, photo_paths, checked, caption, est_protein, est_calories, updated_at')
+        .select('requirement_id, photo_path, photo_paths, checked, caption, est_protein, est_calories, est_carbs, est_fat, est_sat_fat, est_fiber, updated_at')
         .eq('day_log_id', d.id)
       for (const e of es || []) {
         const r = byId[e.requirement_id]; if (!r) continue
@@ -97,7 +97,8 @@ async function main() {
           date: d.log_date, status: d.status, kind: r.kind, label: r.label, group: r.group_label,
           optional: r.optional,
           done: !!(e.photo_paths?.length || e.photo_path || e.checked),
-          caption: e.caption || null, protein: e.est_protein ?? null, calories: e.est_calories ?? null, updated: e.updated_at || null,
+          caption: e.caption || null, protein: e.est_protein ?? null, calories: e.est_calories ?? null, carbs: e.est_carbs ?? null, fat: e.est_fat ?? null,
+          satFat: e.est_sat_fat ?? null, fiber: e.est_fiber ?? null, updated: e.updated_at || null,
         })
       }
     }
@@ -257,6 +258,7 @@ async function main() {
     const dayMeals = onDay.filter((r) => r.caption)
     const kcal = dayMeals.reduce((a, m) => a + (m.calories || 0), 0)
     const prot = dayMeals.reduce((a, m) => a + (m.protein || 0), 0)
+    const sum = (k) => { const v = dayMeals.reduce((a, m) => a + (m[k] || 0), 0); return v || '' }
     // Timestamps record when an entry was WRITTEN. If every entry on a day
     // shares the same minute it was a bulk backfill, not a lived timeline —
     // emitting those as meal/workout times would invent a schedule that never
@@ -272,8 +274,8 @@ async function main() {
       date: d,
       calories: kcal || '',
       protein_g: prot || '',
-      carbs_g: 'not_tracked', total_fat_g: 'not_tracked',
-      saturated_fat_g: 'not_tracked', fiber_g: 'not_tracked', sodium_mg: 'not_tracked',
+      carbs_g: sum('carbs'), total_fat_g: sum('fat'),
+      saturated_fat_g: sum('satFat'), fiber_g: sum('fiber'), sodium_mg: 'not_tracked',
       alcohol_units: 0,
       water_target_met: water ? (water.done ? 'yes' : 'no') : 'not_tracked',
       meals_logged: dayMeals.length,
@@ -291,7 +293,7 @@ async function main() {
   const mealRows = meals.map((m) => ({
     date: m.date, time_local: m.updated ? localTime(m.updated) : '',
     calories: m.calories ?? '', protein_g: m.protein ?? '',
-    saturated_fat_g: 'not_tracked', fiber_g: 'not_tracked',
+    saturated_fat_g: m.satFat ?? '', fiber_g: m.fiber ?? '',
     description: `"${m.caption.replace(/"/g, "'")}"`,
   }))
   const mcols = Object.keys(mealRows[0])

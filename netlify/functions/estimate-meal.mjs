@@ -69,8 +69,11 @@ async function handle(req) {
       method: 'POST',
       headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 700,
+        model: 'claude-opus-5',
+        // Itemizing six values per ingredient is a much longer answer than the
+        // original two, and at 700 the model ran out mid-reasoning and never
+        // emitted the closing JSON, which read as "unparseable estimate".
+        max_tokens: 2500,
         system:
           'You estimate nutrition from a meal photo and the eater\'s one-line description. ' +
           'The description is AUTHORITATIVE for what the meal is and the quantities. If it says "6 eggs", estimate 6 eggs even if the photo makes portions hard to judge. ' +
@@ -96,7 +99,17 @@ async function handle(req) {
     // JSON object. Grab the LAST flat {...} so the reasoning can't fool the parse.
     const objs = text.match(/\{[^{}]*\}/g) || []
     let est = {}
-    try { est = JSON.parse(objs[objs.length - 1] || '{}') } catch { /* skip */ }
+    // Take the last object that actually carries totals. Guards against a
+    // stray brace in the itemized reasoning winning over the real answer.
+    for (let i = objs.length - 1; i >= 0; i--) {
+      try {
+        const cand = JSON.parse(objs[i])
+        if (cand && (Number.isFinite(cand.calories) || Number.isFinite(cand.protein_g))) { est = cand; break }
+      } catch { /* keep looking */ }
+    }
+    if (!Object.keys(est).length && ai?.stop_reason === 'max_tokens') {
+      return Response.json({ skipped: 'truncated before totals' }, { status: 200 })
+    }
     const clamp = (v, hi) => (Number.isFinite(v) ? Math.max(0, Math.min(hi, Math.round(v))) : null)
     const protein = clamp(est.protein_g, 300)
     const calories = clamp(est.calories, 4000)

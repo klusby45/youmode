@@ -73,6 +73,7 @@ async function main() {
   const { data: entries } = await sb.from('log_entries')
     .select('id, requirement_id, caption, photo_path, photo_paths, est_protein, est_calories, est_sat_fat')
     .eq('user_id', prof.id)
+    .order('id') // stable order, so --limit hits the same rows across runs
   const todo = (entries || [])
     .filter((e) => mealReqIds.has(e.requirement_id))
     .filter((e) => e.caption || e.photo_path || e.photo_paths?.length)
