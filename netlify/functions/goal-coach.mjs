@@ -19,21 +19,28 @@ How to behave:
 - Ask AT MOST one clarifying question per message, and only what you actually need: current weight, height, rough activity level, timeline. If they already gave enough, propose immediately.
 - BE HONEST ABOUT FEASIBILITY. Sustainable fat loss ≈ 0.5-1% of bodyweight/week; lean muscle gain ≈ 0.25-0.5 lb/week for most trained people. If their timeline is unrealistic, say so plainly and propose the honest version (right goal, adjusted date or target). Never rubber-stamp an infeasible goal.
 - SAFETY FLOORS (hard rules): never propose under 1,400 calories/day; never propose loss faster than 1% bodyweight/week; protein 0.7-1g per lb of target weight. If the request pattern-matches disordered eating, or the user appears to be a minor, or mentions pregnancy, an eating disorder history, diabetes, or medications: do NOT propose a plan — warmly recommend they work with a doctor or registered dietitian instead.
-- SCOPE: you only plan body-composition/nutrition goals. The app tracks: daily meal photos with AI macro estimates vs. protein/calorie targets, and weekly weigh-ins with a trend line. You cannot track anything else — if asked for other goal types, say what you can and can't hold them to. For off-topic requests (homework, emails, general chat), politely decline and steer back.
+- SCOPE: you only plan body-composition and nutrition goals. The app tracks daily meal photos with AI estimates of calories, protein, carbs, total fat, SATURATED FAT, FIBER, SODIUM and SUGAR, plus optional weekly weigh-ins with a trend line. You cannot track anything else — if asked for other goal types, say what you can and can't hold them to. For off-topic requests (homework, emails, general chat), politely decline and steer back.
+- A NUTRITION GOAL DOES NOT REQUIRE A WEIGHT GOAL. Plenty of people want to raise fiber, cut saturated fat, or lower sodium with no interest in the scale. When that is what they want, set mode 'targets', fill only the nutrient fields that matter, and leave every weight field out. Never invent a target weight to make a plan look complete.
+- When someone brings a REASON (blood work, cholesterol, ApoB, blood pressure, digestion, a doctor's advice), ask what specifically they were told or what the numbers were, then anchor the targets to it and say why in one clause. Common anchors: fiber 25-38g/day; saturated fat under 10 percent of calories, or under about 6 percent when they mention high cholesterol or ApoB; sodium under 2300mg; added sugar under about 10 percent of calories. Setting a dietary target is fine. Interpreting their labs, naming a diagnosis, or second-guessing their doctor is not, so keep to the food and tell them to take the numbers themselves to their doctor.
 - Plans are estimates, not medical advice; weekly weigh-ins are the truth that corrects the targets.
 
-When you have enough information and the goal is safe and realistic, call the propose_plan tool. Put a one-line human summary in goal_text (e.g. "170 lbs · lean gain by Dec 31"). Alongside the tool call, tell them the reasoning in one or two sentences.`
+When you have enough information and the goal is safe and realistic, call the propose_plan tool. Put a one-line human summary in goal_text (e.g. "170 lbs, lean gain by Dec 31" or "more fiber, less saturated fat"). Alongside the tool call, tell them the reasoning in one or two sentences.`
 
 const TOOL = {
   name: 'propose_plan',
   description: 'Propose the final structured plan. Only call when you have enough info and the plan is safe and realistic. The user must accept it in the app before it takes effect.',
   input_schema: {
     type: 'object',
-    required: ['goal_text', 'target_weight', 'protein_min', 'protein_max', 'calorie_target', 'rate_target'],
+    required: ['goal_text', 'mode'],
     properties: {
-      goal_text: { type: 'string', description: 'One-line summary, ≤120 chars, e.g. "170 lbs · lean gain by Dec 31"' },
+      goal_text: { type: 'string', description: 'One-line summary, <=120 chars, e.g. "170 lbs, lean gain by Dec 31" or "more fiber, less saturated fat"' },
+      mode: { type: 'string', enum: ['aware', 'targets'], description: '"targets" whenever you are proposing numbers to aim at. "aware" only if they want the figures shown with nothing to hit.' },
+      fiber_target: { type: 'integer', description: 'Daily fiber floor in grams, typically 25-38.' },
+      sat_fat_max: { type: 'integer', description: 'Daily saturated fat ceiling in grams.' },
+      sodium_max: { type: 'integer', description: 'Daily sodium ceiling in mg, usually 2300.' },
+      sugar_max: { type: 'integer', description: 'Daily added sugar ceiling in grams.' },
       start_weight: { type: 'number', description: 'Current weight in lbs, if known' },
-      target_weight: { type: 'number', description: 'Target weight in lbs' },
+      target_weight: { type: 'number', description: 'Target weight in lbs. OMIT for a nutrition-only goal.' },
       target_date: { type: 'string', description: 'YYYY-MM-DD' },
       protein_min: { type: 'integer', description: 'Daily protein floor, grams' },
       protein_max: { type: 'integer', description: 'Daily protein ceiling, grams' },
@@ -45,18 +52,26 @@ const TOOL = {
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number(v)))
 
+// Every field except the summary is optional. Requiring a target weight here
+// meant "I want more fiber" could not be expressed as a plan at all.
 function validateProposal(input, today) {
+  const opt = (v, lo, hi) => (v == null || !Number.isFinite(+v) ? null : Math.round(clamp(+v, lo, hi)))
   const p = {
     goalText: String(input.goal_text || '').slice(0, 200),
+    mode: input.mode === 'aware' ? 'aware' : 'targets',
     startWeight: input.start_weight ? clamp(input.start_weight, 60, 500) : null,
-    targetWeight: clamp(input.target_weight, 70, 400),
+    targetWeight: input.target_weight != null ? clamp(input.target_weight, 70, 400) : null,
     targetDate: null,
-    proteinMin: Math.round(clamp(input.protein_min, 50, 300)),
-    proteinMax: Math.round(clamp(input.protein_max, 50, 300)),
-    calorieTarget: Math.round(clamp(input.calorie_target, 1400, 6000)),
-    rateTarget: clamp(input.rate_target, -2, 2),
+    proteinMin: opt(input.protein_min, 50, 300),
+    proteinMax: opt(input.protein_max, 50, 300),
+    calorieTarget: opt(input.calorie_target, 1400, 6000),
+    fiberTarget: opt(input.fiber_target, 5, 100),
+    satFatMax: opt(input.sat_fat_max, 5, 100),
+    sodiumMax: opt(input.sodium_max, 500, 10000),
+    sugarMax: opt(input.sugar_max, 5, 200),
+    rateTarget: input.rate_target != null ? clamp(input.rate_target, -2, 2) : null,
   }
-  if (p.proteinMax < p.proteinMin) p.proteinMax = p.proteinMin
+  if (p.proteinMin != null && p.proteinMax != null && p.proteinMax < p.proteinMin) p.proteinMax = p.proteinMin
   if (/^\d{4}-\d{2}-\d{2}$/.test(input.target_date || '')) {
     const t = Date.parse(input.target_date)
     const min = Date.parse(today) + 7 * 864e5

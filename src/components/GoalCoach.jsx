@@ -116,12 +116,19 @@ export default function GoalCoach({ onClose }) {
           <div className="plan-preview">
             <div className="pp-title"><Icon name="bolt" size={14} />The plan</div>
             <div className="pp-goal">{proposal.goalText}</div>
+            {/* Render only what this plan carries. A nutrition-only goal has
+                no weights and no pace, and printing blanks for them would
+                imply a scale target the member never asked for. */}
             <div className="pp-grid">
-              {proposal.startWeight && <span>start <b>{proposal.startWeight} lbs</b></span>}
-              <span>target <b>{proposal.targetWeight} lbs</b></span>
-              <span>protein <b>{proposal.proteinMin}–{proposal.proteinMax}g</b></span>
-              <span>calories <b>{Number(proposal.calorieTarget).toLocaleString()}/day</b></span>
-              <span>pace <b>{proposal.rateTarget > 0 ? '+' : ''}{proposal.rateTarget} lb/wk</b></span>
+              {proposal.startWeight != null && <span>start <b>{proposal.startWeight} lbs</b></span>}
+              {proposal.targetWeight != null && <span>target <b>{proposal.targetWeight} lbs</b></span>}
+              {proposal.proteinMin != null && <span>protein <b>{proposal.proteinMin}–{proposal.proteinMax}g</b></span>}
+              {proposal.calorieTarget != null && <span>calories <b>{Number(proposal.calorieTarget).toLocaleString()}/day</b></span>}
+              {proposal.fiberTarget != null && <span>fiber <b>{proposal.fiberTarget}g+</b></span>}
+              {proposal.satFatMax != null && <span>sat fat <b>under {proposal.satFatMax}g</b></span>}
+              {proposal.sodiumMax != null && <span>sodium <b>under {Number(proposal.sodiumMax).toLocaleString()}mg</b></span>}
+              {proposal.sugarMax != null && <span>added sugar <b>under {proposal.sugarMax}g</b></span>}
+              {proposal.rateTarget != null && <span>pace <b>{proposal.rateTarget > 0 ? '+' : ''}{proposal.rateTarget} lb/wk</b></span>}
               {proposal.targetDate && <span>by <b>{proposal.targetDate}</b></span>}
             </div>
             <div className="review-actions" style={{ marginTop: 12 }}>
