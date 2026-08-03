@@ -10,7 +10,7 @@ import { ModeCards } from './PostCreateSteps.jsx'
 export default function YouSheet({
   theme, onPickTheme, tone, onPickTone,
   sharing, onPickSharing, photoReqs = [], onToggleReq, showPrivacy = true,
-  email, onSaveEmail, onDeleteAccount, onEditChecklist, onNewChallenge, onClose,
+  email, onSaveEmail, onDeleteAccount, onEditChecklist, onNewChallenge, onExport, onClose,
 }) {
   return (
     <Sheet onClose={onClose}>
@@ -42,6 +42,16 @@ export default function YouSheet({
               <Icon name="chevron" size={15} className="set-chev" />
             </button>
           )}
+        </>
+      )}
+
+      {onExport && (
+        <>
+          <div className="set-label"><Icon name="upload" size={13} />My data</div>
+          <button className="theme-opt set-action" onClick={onExport}>
+            <Icon name="upload" size={17} /><span className="to-label">Export for my doctor</span>
+            <Icon name="chevron" size={15} className="set-chev" />
+          </button>
         </>
       )}
 

@@ -8,6 +8,7 @@ import { copyFor, getStoredTone, storeTone, normalizeTone } from './copy.js'
 import { AppCtx, useApp } from './appContext.js'
 import Icon from './components/Icons.jsx'
 import YouSheet from './components/YouSheet.jsx'
+import ExportSheet from './components/ExportSheet.jsx'
 import Landing from './components/Landing.jsx'
 import Login from './components/Login.jsx'
 import ResetPassword from './components/ResetPassword.jsx'
@@ -49,6 +50,7 @@ export default function App() {
   const [theme, setThemeState] = useState(getStoredTheme)
   const [tone, setToneState] = useState(getStoredTone)
   const [youOpen, setYouOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [editingList, setEditingList] = useState(false)
   const [creatingNew, setCreatingNew] = useState(false) // building an ADDITIONAL challenge
@@ -396,8 +398,10 @@ export default function App() {
             onDeleteAccount={deleteAccount}
             onEditChecklist={!isReferee ? () => { setYouOpen(false); setEditingList(true) } : null}
             onNewChallenge={() => { setYouOpen(false); setCreatingNew(true) }}
+            onExport={() => { setYouOpen(false); setExportOpen(true) }}
             onClose={() => setYouOpen(false)} />
         )}
+        {exportOpen && <ExportSheet onClose={() => setExportOpen(false)} />}
         {editingList && (
           <EditChecklistSheet
             reqs={reqsFor(me.id).filter((r) => !api.isExtraMeal(r))}
@@ -952,6 +956,9 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
    filled so it reads as "held" instead of "earned". */
 .cal-cell.excused{background:color-mix(in srgb,var(--blue) 16%,transparent);
   border-color:color-mix(in srgb,var(--blue) 60%,transparent);color:var(--text);font-weight:600}
+/* Export sheet: a compact row of what's about to leave the app. */
+.ex-stats{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
+.ex-stats b{color:var(--text);font-family:var(--num-font,var(--cond));font-size:15px;margin-right:3px}
 /* Today nudge: a still-saveable day, pointed at from where people look. */
 .save-nudge{display:flex;align-items:center;gap:10px;width:100%;text-align:left;margin:12px 0 0;
   padding:11px 14px;border-radius:var(--r-sm);cursor:pointer;color:var(--text);
