@@ -565,10 +565,17 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
                 </p>
                 {plan.goalText && <div className="oc-plan-goal">{plan.goalText}</div>}
                 <div className="pp-grid" style={acceptPlan ? undefined : { opacity: 0.45 }}>
+                  {/* Only render what this plan actually carries. An 'aware'
+                      plan has no weights and no targets, and printing empty
+                      ones would invent goals the member declined. */}
                   {plan.startWeight ? <span>start <b>{plan.startWeight} lbs</b></span> : null}
-                  <span>target <b>{plan.targetWeight} lbs</b></span>
-                  <span>protein <b>{plan.proteinMin}–{plan.proteinMax}g</b></span>
-                  <span>calories <b>{Number(plan.calorieTarget).toLocaleString()}/day</b></span>
+                  {plan.targetWeight ? <span>target <b>{plan.targetWeight} lbs</b></span> : null}
+                  {plan.proteinMin ? <span>protein <b>{plan.proteinMin}–{plan.proteinMax}g</b></span> : null}
+                  {plan.calorieTarget ? <span>calories <b>{Number(plan.calorieTarget).toLocaleString()}/day</b></span> : null}
+                  {plan.fiberTarget ? <span>fiber <b>{plan.fiberTarget}g</b></span> : null}
+                  {plan.satFatMax ? <span>sat fat <b>under {plan.satFatMax}g</b></span> : null}
+                  {plan.sodiumMax ? <span>sodium <b>under {Number(plan.sodiumMax).toLocaleString()}mg</b></span> : null}
+                  {plan.mode === 'aware' ? <span>just the numbers, <b>no targets</b></span> : null}
                   <span>pace <b>{plan.rateTarget > 0 ? '+' : ''}{plan.rateTarget} lb/wk</b></span>
                   {plan.targetDate ? <span>by <b>{plan.targetDate}</b></span> : null}
                 </div>

@@ -548,6 +548,11 @@ const planRow = (p) => ({
   target_weight: p.targetWeight, target_date: p.targetDate,
   protein_min: p.proteinMin, protein_max: p.proteinMax,
   calorie_target: p.calorieTarget, rate_target: p.rateTarget,
+  // Nutrition prefs ride along; all null for a pure weight goal, and the
+  // weight fields are all null for someone who only wants meal numbers.
+  nutrition_mode: p.mode || p.nutritionMode || null,
+  fiber_target: p.fiberTarget ?? null, sat_fat_max: p.satFatMax ?? null,
+  sodium_max: p.sodiumMax ?? null, sugar_max: p.sugarMax ?? null,
 })
 
 // Goals are additive — a member can stack several.

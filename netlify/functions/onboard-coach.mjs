@@ -31,9 +31,11 @@ What this app can actually track:
 - A format: solo (just them), versus (head-to-head with one friend), accountability (partners, different goals), or community (a small crew each on their own checklist).
 
 Body-composition and nutrition goals (opt-in):
-- The app CAN track weight and nutrition, but only if the member wants that layer. It does weekly weigh-ins with a trend line, and AI macro estimates from meal photos against daily protein and calorie targets.
-- If they mention a weight, muscle, or body-composition goal (lose weight, gain lean muscle, hit a protein number), do not silently reduce it to one meal photo. ASK once whether they want you to set weight and protein/calorie targets too. Only if they say yes, include a body_plan in the proposal. If they decline or do not mention body goals, omit body_plan entirely.
-- When you do propose a body_plan, be honest and safe. Sustainable fat loss is about 0.5 to 1 percent of bodyweight per week; lean muscle gain about 0.25 to 0.5 lb per week. SAFETY FLOORS (hard rules): never under 1,400 calories per day; protein roughly 0.7 to 1g per lb of target weight. If the request pattern-matches disordered eating, or the member seems to be a minor, or mentions pregnancy, an eating-disorder history, or relevant medications: do NOT propose a body_plan. Warmly suggest they work with a doctor or registered dietitian. You can still build the activity checklist.
+- The app CAN track food and weight, but only if the member wants that layer. Meal logging works from a photo plus a one-line description; weekly weigh-ins with a trend line are a separate, optional extra on top.
+- If their goal touches food or their body at all (lose weight, gain muscle, lean out, flatter stomach, bulk, eat better, hit a protein number, more energy), TELL THEM meal logging exists and offer it once, plainly: they photograph a meal and describe it in a sentence, and the app estimates calories, protein, carbs, fat, saturated fat, fiber, sodium and sugar. It works like a calorie tracker but sits inside the rest of their challenge instead of being a separate chore. Then ask ONE question and only that one: do they want just the numbers with no targets attached, or actual targets to aim at. Set body_plan.mode to 'aware' for the first and 'targets' for the second. Do NOT ask their weight in the same breath. Someone deciding whether they want to be measured at all should not be asked their weight in the same sentence, and if they answer 'just the numbers' you never needed it. Ask about weight only after they choose targets, or if they raised a weight goal themselves. If they are not interested, omit body_plan entirely and never bring it up again. It is their call.
+- Only include weight fields (start_weight, target_weight, rate_target) when they actually want a weight goal. Someone who just wants to see what they eat gets mode 'aware' and no weights, no calorie target, nothing to hit.
+- When they DO want targets, derive them from what they told you rather than reaching for defaults: bodyweight and direction drive protein and calories, and fiber, saturated fat and sodium follow from the goal (fiber around 25 to 35g; saturated fat under about 10 percent of calories, lower if they mention cholesterol or heart history; sodium under 2300mg). Explain each number in one short clause so it does not feel arbitrary.
+- When you do propose targets, be honest and safe. Sustainable fat loss is about 0.5 to 1 percent of bodyweight per week; lean muscle gain about 0.25 to 0.5 lb per week. SAFETY FLOORS (hard rules): never under 1,400 calories per day; protein roughly 0.7 to 1g per lb of target weight. If the request pattern-matches disordered eating, or the member seems to be a minor, or mentions pregnancy, an eating-disorder history, or relevant medications: do NOT propose a body_plan. Warmly suggest they work with a doctor or registered dietitian. You can still build the activity checklist.
 
 Stakes (suggested_stake) depend entirely on the format, because a stake is something OTHER people hold you to:
 - SOLO: leave suggested_stake empty. There is no one to enforce a wager, so do not invent one.
@@ -80,10 +82,15 @@ const TOOL = {
       },
       body_plan: {
         type: 'object',
-        description: 'OPTIONAL. Include ONLY when the member has a body-composition or nutrition goal AND explicitly agreed to weight and protein/calorie targets. Omit entirely otherwise. Mirrors the app\'s weigh-in and macro tracking.',
-        required: ['goal_text', 'target_weight', 'protein_min', 'protein_max', 'calorie_target', 'rate_target'],
+        description: 'OPTIONAL. Include ONLY when the member has a food or body goal AND agreed to meal logging. mode "aware" = log meals and see the numbers, no targets, no weight goal. mode "targets" = they also want numbers to aim at. Weight fields only when they actually want a weight goal. Omit this object entirely if they declined.',
+        required: ['mode', 'goal_text'],
         properties: {
-          goal_text: { type: 'string', description: 'One-line summary, <=120 chars, e.g. "170 lbs, lean gain by Dec 31".' },
+          mode: { type: 'string', enum: ['aware', 'targets'], description: '"aware" = show the numbers only. "targets" = also set goals to aim at.' },
+          goal_text: { type: 'string', description: 'One-line summary, <=120 chars, e.g. "eat better, see what I am actually eating" or "170 lbs, lean gain by Dec 31".' },
+          fiber_target: { type: 'integer', description: 'Daily fiber goal in grams, roughly 25-35. Only when mode is targets.' },
+          sat_fat_max: { type: 'integer', description: 'Daily saturated fat ceiling in grams. Only when mode is targets.' },
+          sodium_max: { type: 'integer', description: 'Daily sodium ceiling in mg, usually 2300. Only when mode is targets.' },
+          sugar_max: { type: 'integer', description: 'Daily added sugar ceiling in grams. Only when mode is targets.' },
           start_weight: { type: 'number', description: 'Current weight in lbs, if known.' },
           target_weight: { type: 'number', description: 'Target weight in lbs.' },
           target_date: { type: 'string', description: 'YYYY-MM-DD.' },
@@ -113,20 +120,33 @@ const timerFits = (label) => !/\b(meal|meals|breakfast|lunch|dinner|snack|snacks
 
 // Reuse goal-coach's clamps verbatim so a body_plan built here is byte-identical
 // to one from the Goal Coach: the same safety envelope, the same client shape.
+// Every field is optional except the mode. A member who only wants to see what
+// they eat gets a valid plan with no weights and nothing to hit; requiring a
+// target weight here was the same bundling that made nutrition inaccessible
+// to anyone without a weight goal.
 function validateBodyPlan(bp, today) {
   if (!bp || typeof bp !== 'object') return null
-  if (bp.target_weight == null || bp.calorie_target == null) return null
+  const mode = bp.mode === 'targets' ? 'targets' : 'aware'
+  const opt = (v, lo, hi) => (v == null || !Number.isFinite(+v) ? null : Math.round(clamp(+v, lo, hi)))
   const p = {
+    mode,
     goalText: String(bp.goal_text || '').slice(0, 200),
     startWeight: bp.start_weight ? clamp(bp.start_weight, 60, 500) : null,
-    targetWeight: clamp(bp.target_weight, 70, 400),
+    targetWeight: bp.target_weight != null ? clamp(bp.target_weight, 70, 400) : null,
     targetDate: null,
-    proteinMin: Math.round(clamp(bp.protein_min, 50, 300)),
-    proteinMax: Math.round(clamp(bp.protein_max, 50, 300)),
-    calorieTarget: Math.round(clamp(bp.calorie_target, 1400, 6000)),
-    rateTarget: clamp(bp.rate_target, -2, 2),
+    // Targets only exist in 'targets' mode. In 'aware' mode they are dropped
+    // even if the model volunteered them, so the UI cannot grade someone who
+    // explicitly asked not to be graded.
+    proteinMin: mode === 'targets' ? opt(bp.protein_min, 50, 300) : null,
+    proteinMax: mode === 'targets' ? opt(bp.protein_max, 50, 300) : null,
+    calorieTarget: mode === 'targets' ? opt(bp.calorie_target, 1400, 6000) : null,
+    fiberTarget: mode === 'targets' ? opt(bp.fiber_target, 5, 100) : null,
+    satFatMax: mode === 'targets' ? opt(bp.sat_fat_max, 5, 100) : null,
+    sodiumMax: mode === 'targets' ? opt(bp.sodium_max, 500, 10000) : null,
+    sugarMax: mode === 'targets' ? opt(bp.sugar_max, 5, 200) : null,
+    rateTarget: bp.rate_target != null ? clamp(bp.rate_target, -2, 2) : null,
   }
-  if (p.proteinMax < p.proteinMin) p.proteinMax = p.proteinMin
+  if (p.proteinMin != null && p.proteinMax != null && p.proteinMax < p.proteinMin) p.proteinMax = p.proteinMin
   if (/^\d{4}-\d{2}-\d{2}$/.test(bp.target_date || '')) {
     const t = Date.parse(bp.target_date)
     const min = Date.parse(today) + 7 * 864e5
