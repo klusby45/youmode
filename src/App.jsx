@@ -961,6 +961,26 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .mb-more{background:none;border:none;color:var(--muted);font-family:var(--cond);font-size:11px;
   letter-spacing:.12em;text-transform:uppercase;display:inline-flex;align-items:center;gap:3px;
   padding:4px 0 0;cursor:pointer;align-self:flex-start}
+/* Blood work: upload target + the reviewable marker list. */
+.lab-drop{display:flex;flex-direction:column;align-items:center;gap:5px;padding:26px 18px;cursor:pointer;
+  border:1px dashed var(--line-2);border-radius:var(--r);background:var(--panel);text-align:center}
+.lab-drop input{display:none}
+.lab-drop .ld-title{font-weight:650;font-size:14px;margin-top:4px}
+.lab-drop .ld-sub{color:var(--muted);font-size:12px}
+.lab-list{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow-y:auto}
+.lab-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r-sm);
+  background:var(--panel-2);border:1px solid transparent}
+.lab-row.flag{border-color:color-mix(in srgb,var(--amber) 50%,transparent);
+  background:color-mix(in srgb,var(--amber) 8%,transparent)}
+.lab-row .lr-name{flex:1;font-size:13px}
+.lab-row .lr-val{font-size:13px;color:var(--muted);white-space:nowrap}
+.lab-row .lr-val b{color:var(--text);font-size:14px}
+.lab-row .lr-val small{font-size:11px}
+.lr-x{background:none;border:none;color:var(--muted-2);cursor:pointer;padding:2px;display:flex}
+.lab-saved{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-top:6px;
+  border-radius:var(--r-sm);background:var(--panel-2);font-size:13px}
+.lab-saved span:first-child{flex:1}
+.lab-entry .gc-ic{color:var(--brand)}
 /* Export sheet: a compact row of what's about to leave the app. */
 .ex-stats{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
 .ex-stats b{color:var(--text);font-family:var(--num-font,var(--cond));font-size:15px;margin-right:3px}

@@ -4,6 +4,7 @@ import { goalStatus, todayInTz, daysBetween } from '../lib/challenge.js'
 import * as api from '../data.js'
 import Icon from './Icons.jsx'
 import GoalCoach from './GoalCoach.jsx'
+import LabSheet from './LabSheet.jsx'
 
 // Optional goals per member: professional milestones and/or a body goal.
 // Cards carry the member's accent. Participants without a body plan get the
@@ -11,6 +12,7 @@ import GoalCoach from './GoalCoach.jsx'
 export default function Goals() {
   const { participants, plans, me, myPlan, isReferee, t } = useApp()
   const [coaching, setCoaching] = useState(false)
+  const [labs, setLabs] = useState(false)
   return (
     <div>
       {/* No title — the Goals tab is the title (Miska). */}
@@ -41,7 +43,18 @@ export default function Goals() {
           <Icon name="chevron" size={16} />
         </button>
       )}
+      {!isReferee && (
+        <button className="goal-create lab-entry" onClick={() => setLabs(true)}>
+          <span className="gc-ic"><Icon name="upload" size={20} /></span>
+          <span className="gc-txt">
+            <b>Add blood work</b>
+            <small>Upload your results so goals use real numbers. Read once, never stored.</small>
+          </span>
+          <Icon name="chevron" size={16} />
+        </button>
+      )}
       {coaching && <GoalCoach onClose={() => setCoaching(false)} />}
+      {labs && <LabSheet onClose={() => setLabs(false)} />}
     </div>
   )
 }

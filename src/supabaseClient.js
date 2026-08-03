@@ -76,6 +76,10 @@ const nPlan = (r) => r && ({
   // A row with no weight fields is nutrition-only, not half-filled.
   hasBodyGoal: r.target_weight != null || r.rate_target != null,
 })
+const nLab = (r) => r && ({
+  id: r.id, userId: r.user_id, drawnOn: r.drawn_on, panelName: r.panel_name,
+  markers: Array.isArray(r.markers) ? r.markers : [], createdAt: r.created_at,
+})
 const nWeighIn = (r) => r && ({ id: r.id, userId: r.user_id, date: r.weigh_date, weight: Number(r.weight) })
 const nLog = (r) => r && ({
   id: r.id, challengeId: r.challenge_id, userId: r.user_id, logDate: r.log_date,
@@ -697,6 +701,46 @@ export async function useRedemption(memberId, date) {
     throw new Error(error.message || "Couldn't use your save.")
   }
   return nMember(data)
+}
+
+// ─── blood work ──────────────────────────────────────────────────────────
+// The uploaded document is never persisted: extract-labs reads it in flight
+// and only the markers the member confirms are stored (supabase/lab-results.sql).
+export async function extractLabs(fileBase64, mime, today) {
+  const { data } = await supabase.auth.getSession()
+  const token = data?.session?.access_token
+  if (!token) throw new Error('Sign in again to upload results.')
+  const res = await fetch(`${API_BASE}/api/extract-labs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ fileBase64, mime, today }),
+  })
+  // Heartbeat-streamed: leading newlines are legal JSON whitespace, so this
+  // parses unchanged. Errors arrive in the body rather than the status.
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || body.error) throw new Error(body.error || 'Could not read that file.')
+  return body
+}
+
+export async function saveLabResult(userId, { drawnOn, panelName, markers }) {
+  const { data, error } = await supabase.from('lab_results')
+    .upsert({ user_id: userId, drawn_on: drawnOn, panel_name: panelName || null, markers },
+      { onConflict: 'user_id,drawn_on' })
+    .select().single()
+  if (error) throw error
+  return nLab(data)
+}
+
+export async function listLabResults(userId) {
+  const { data, error } = await supabase.from('lab_results')
+    .select('*').eq('user_id', userId).order('drawn_on', { ascending: false })
+  if (error) return [] // table not migrated yet: the rest of Goals still works
+  return (data || []).map(nLab)
+}
+
+export async function deleteLabResult(id) {
+  const { error } = await supabase.from('lab_results').delete().eq('id', id)
+  if (error) throw error
 }
 
 // ─── referee verdict ──────────────────────────────────────────────────────

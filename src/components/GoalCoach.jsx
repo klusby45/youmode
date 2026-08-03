@@ -63,7 +63,18 @@ export default function GoalCoach({ onClose }) {
     setMsgs(next)
     setBusy(true)
     try {
-      const { reply, proposal: p } = await api.coachChat(next.filter((m) => m.content !== GREETING))
+      // Give the coach the most recent panel so it can anchor targets to real
+      // numbers instead of asking the member to recite them.
+      const labs = await api.listLabResults(me.id).catch(() => [])
+      const latest = labs[0]
+      const labNote = latest
+        ? `[Their most recent blood work, drawn ${latest.drawnOn}: `
+          + latest.markers.map((m) => `${m.name} ${m.value}${m.unit ? ' ' + m.unit : ''}${m.flag !== 'normal' ? ` (${m.flag})` : ''}`).join('; ')
+          + '. Use these to anchor targets. Do not diagnose or interpret them.]'
+        : null
+      const outgoing = next.filter((m) => m.content !== GREETING)
+      const { reply, proposal: p } = await api.coachChat(
+        labNote ? [{ role: 'user', content: labNote }, ...outgoing] : outgoing)
       setMsgs((xs) => [...xs, { role: 'assistant', content: reply }])
       if (p) setProposal(p)
     } catch {
