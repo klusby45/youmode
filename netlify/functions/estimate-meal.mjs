@@ -49,10 +49,10 @@ async function handle(req) {
     if (!entry) return Response.json({ error: 'entry not found' }, { status: 404 })
     if (entry.user_id !== user.id) return Response.json({ error: 'not your entry' }, { status: 403 })
 
-    // Only for members with a body plan, on photo entries.
-    const pRes = await fetch(`${SUPABASE_URL}/rest/v1/body_plans?user_id=eq.${entry.user_id}&select=id`, { headers: svc })
-    const plans = await pRes.json()
-    if (!plans.length) return Response.json({ skipped: 'no body plan' }, { status: 200 })
+    // Nutrition used to require a body plan, which meant seeing what you ate
+    // was gated behind declaring a goal weight and a rate of loss. Wanting to
+    // know your fiber is not the same as wanting a weight program, so the only
+    // gate now is having logged something to estimate.
     const paths = entry.photo_paths?.length ? entry.photo_paths : (entry.photo_path ? [entry.photo_path] : [])
     if (!paths.length && !entry.caption) return Response.json({ skipped: 'nothing to estimate' }, { status: 200 })
 
@@ -69,7 +69,7 @@ async function handle(req) {
       method: 'POST',
       headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
       body: JSON.stringify({
-        model: 'claude-opus-5',
+        model: 'claude-sonnet-5',
         // Itemizing six values per ingredient is a much longer answer than the
         // original two, and at 700 the model ran out mid-reasoning and never
         // emitted the closing JSON, which read as "unparseable estimate".
@@ -79,15 +79,16 @@ async function handle(req) {
           'The description is AUTHORITATIVE for what the meal is and the quantities. If it says "6 eggs", estimate 6 eggs even if the photo makes portions hard to judge. ' +
           'Use the photo only to fill in items the description omits and to catch wild mismatches (description says steak, photo shows salad, then estimate the photo). ' +
           'Work it out step by step before answering. List every distinct food and ingredient on its own line with its own calories, protein, carbohydrate, total fat, SATURATED fat, and fiber, using realistic standard nutrition values. ' +
+          'Sodium and sugar: count added and naturally-occurring sugar together, and include salt from sauces, dressings, cured meat, bread and restaurant cooking, which is where most sodium hides. '+
           'Reference points: one large egg is about 75 cal, 6g protein, 5g fat, 1.6g saturated, 0g fiber. 1 tbsp butter about 120 cal and 7g saturated. 1 oz hard cheese about 9g fat and 6g saturated. 4 oz cooked chicken breast about 1g saturated. 4 oz fatty red meat (ribeye, lamb, kefta, birria) about 7 to 9g saturated. Dry rolled oats per half cup about 150 cal, 27g carb, 4g fiber. 1 tbsp chia about 5g fiber. Half a cup of cooked beans about 7g fiber. Half an avocado about 5g fiber. Coconut oil and movie-theater popcorn are unusually high in saturated fat. ' +
           'Include the easy-to-miss items so you do not undercount: cooking oil or butter, sauces, dressings, syrups, and nut butters. But keep every line realistic and do not inflate. Add every line up. ' +
           'Saturated fat and fiber matter most here, so reason about them explicitly for each line rather than guessing at the end. Saturated fat can never exceed total fat. ' +
-          'After the itemized list, output the totals as strict JSON on the final line, with nothing after it: {"protein_g": <int>, "calories": <int>, "carbs_g": <int>, "fat_g": <int>, "sat_fat_g": <int>, "fiber_g": <int>}',
+          'After the itemized list, output the totals as strict JSON on the final line, with nothing after it: {"protein_g": <int>, "calories": <int>, "carbs_g": <int>, "fat_g": <int>, "sat_fat_g": <int>, "fiber_g": <int>, "sodium_mg": <int>, "sugar_g": <int>}',
         messages: [{
           role: 'user',
           content: [
             ...photoUrls.map((u) => ({ type: 'image', source: { type: 'url', url: u } })),
-            { type: 'text', text: `Meal: "${entry.requirements?.label || 'meal'}". Description: "${entry.caption || '(none — estimate from photo only)'}". Estimate calories, protein, carbs, total fat, saturated fat, and fiber.` },
+            { type: 'text', text: `Meal: "${entry.requirements?.label || 'meal'}". Description: "${entry.caption || '(none — estimate from photo only)'}". Estimate calories, protein, carbs, total fat, saturated fat, fiber, sodium and sugar.` },
           ],
         }],
       }),
@@ -117,6 +118,8 @@ async function handle(req) {
     const fat = clamp(est.fat_g, 300)
     let satFat = clamp(est.sat_fat_g, 200)
     const fiber = clamp(est.fiber_g, 100)
+    const sodium = clamp(est.sodium_mg, 20000)
+    const sugar = clamp(est.sugar_g, 400)
     // Saturated fat is a subset of total fat; a model slip that violates that
     // would quietly corrupt the one number a lipid panel cares most about.
     if (satFat != null && fat != null && satFat > fat) satFat = fat
@@ -130,15 +133,15 @@ async function handle(req) {
       body: JSON.stringify({ est_protein: protein, est_calories: calories }),
     })
     let stored = false
-    if (carbs != null || fat != null || satFat != null || fiber != null) {
+    if ([carbs, fat, satFat, fiber, sodium, sugar].some((v) => v != null)) {
       const ext = await fetch(`${SUPABASE_URL}/rest/v1/log_entries?id=eq.${entryId}`, {
         method: 'PATCH',
         headers: { ...svc, ...JSON_HEADERS, Prefer: 'return=minimal' },
-        body: JSON.stringify({ est_carbs: carbs, est_fat: fat, est_sat_fat: satFat, est_fiber: fiber }),
+        body: JSON.stringify({ est_carbs: carbs, est_fat: fat, est_sat_fat: satFat, est_fiber: fiber, est_sodium: sodium, est_sugar: sugar }),
       })
       stored = ext.ok
     }
-    return Response.json({ ok: true, protein, calories, carbs, fat, satFat, fiber, extendedStored: stored })
+    return Response.json({ ok: true, protein, calories, carbs, fat, satFat, fiber, sodium, sugar, extendedStored: stored })
   } catch (e) {
     return Response.json({ skipped: String(e?.message || e) }, { status: 200 })
   }

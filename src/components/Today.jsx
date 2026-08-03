@@ -17,6 +17,7 @@ export default function Today() {
   const [saving, setSaving] = useState(null) // requirement id of an in-flight check
   const [saveErr, setSaveErr] = useState(null)
   const [captioning, setCaptioning] = useState(null) // { req, entry } meal being described
+  const [more, setMore] = useState(false) // macro bar: show the secondary numbers
 
   const reqs = reqsFor(me.id)
   const dayNum = currentDayNumber(cfg.startStr, cfg.todayStr)
@@ -51,7 +52,7 @@ export default function Today() {
   // session, then refresh to pull the result. Prevents permanent "estimating…".
   const healed = useRef(new Set())
   useEffect(() => {
-    if (!myPlan || !log) return
+    if (!log) return
     const stranded = reqs.filter(isMealReq).map((r) => log.entriesByReq?.[r.id]).filter(
       (e) => e && (e.photoPaths?.length || e.photoPath) && e.caption && e.estProtein == null && !healed.current.has(e.id)
     )
@@ -61,7 +62,7 @@ export default function Today() {
       .then(() => actions.refresh())
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [log, myPlan])
+  }, [log])
 
   async function onPick(req, file) {
     if (!file) return
@@ -188,11 +189,20 @@ export default function Today() {
   const nextExtra = extraSlots.find((r) => !isFilled(r))
   // Body-goal extras (only for members with a plan): filled meal entries get
   // captions; estimates roll up into the macro bar.
-  const meals = myPlan ? photos.filter(isMealReq)
+  // Nutrition no longer requires a body plan. Anyone logging meals sees what
+  // they ate; a plan only adds targets to compare against.
+  const meals = photos.filter(isMealReq)
     .map((r) => ({ req: r, entry: log?.entriesByReq?.[r.id] }))
-    .filter(({ entry }) => entry?.photoPaths?.length || entry?.photoPath) : []
-  const estP = meals.reduce((a, { entry }) => a + (entry.estProtein || 0), 0)
-  const estC = meals.reduce((a, { entry }) => a + (entry.estCalories || 0), 0)
+    .filter(({ entry }) => entry?.photoPaths?.length || entry?.photoPath)
+  const tot = (k) => meals.reduce((a, { entry }) => a + (entry[k] || 0), 0)
+  const estP = tot('estProtein')
+  const estC = tot('estCalories')
+  const macros = {
+    protein: estP, calories: estC, fiber: tot('estFiber'), satFat: tot('estSatFat'),
+    carbs: tot('estCarbs'), fat: tot('estFat'), sodium: tot('estSodium'), sugar: tot('estSugar'),
+  }
+  const hasMacros = meals.some(({ entry }) => entry.estCalories != null)
+  const showNutrition = hasMacros && myPlan?.nutritionMode !== 'off'
   const flagged = reqs
     .map((r) => ({ req: r, entry: log?.entriesByReq?.[r.id] }))
     .filter(({ entry }) => entry?.aiFlag && !entry.aiDismissed)
@@ -224,19 +234,36 @@ export default function Today() {
         </>
       )}
 
-      {myPlan && (
+      {showNutrition && (
         <div className="macrobar">
-          <MacroRow label="Protein" value={estP} unit="g"
-            target={myPlan.proteinMin} max={myPlan.proteinMax} />
-          <MacroRow label="Calories" value={estC} unit=""
-            target={myPlan.calorieTarget} />
+          <MacroRow label="Protein" value={macros.protein} unit="g"
+            target={myPlan?.proteinMin} max={myPlan?.proteinMax} />
+          <MacroRow label="Calories" value={macros.calories} unit=""
+            target={myPlan?.calorieTarget} />
+          <MacroRow label="Fiber" value={macros.fiber} unit="g"
+            target={myPlan?.fiberTarget} />
+          {/* Saturated fat is the one where less is better, so it reads as a
+              ceiling rather than something to fill up. */}
+          <MacroRow label="Sat fat" value={macros.satFat} unit="g"
+            target={myPlan?.satFatMax} ceiling />
+          {more && (
+            <>
+              <MacroRow label="Carbs" value={macros.carbs} unit="g" />
+              <MacroRow label="Total fat" value={macros.fat} unit="g" />
+              <MacroRow label="Sodium" value={macros.sodium} unit="mg" target={myPlan?.sodiumMax} ceiling />
+              <MacroRow label="Sugar" value={macros.sugar} unit="g" target={myPlan?.sugarMax} ceiling />
+            </>
+          )}
+          <button className="mb-more" onClick={() => setMore((v) => !v)}>
+            {more ? 'Less' : 'More'}<Icon name="chevron" size={12} />
+          </button>
           {/* The meal count lives here now that satisfied slots stop rendering,
               so "am I covered?" is answerable without counting tiles. */}
           <div className="mb-hint">
             {mealPool.target > 0 && (mealPool.met
               ? <>all {mealPool.target} meals logged · </>
               : <>{mealPool.logged} of {mealPool.target} meals · </>)}
-            {meals.length ? 'estimates from your photos + captions' : 'add captions to start counting'}
+            estimates from your photos + captions
           </div>
         </div>
       )}
@@ -272,10 +299,10 @@ export default function Today() {
         {photos.map((r) => (
           <PhotoSlot key={r.id} req={r} entry={log?.entriesByReq?.[r.id]} editable={editable}
             uploading={uploading === r.id} onPick={(f) => onPick(r, f)} onClear={() => onClearPhotos(r)}
-            mealMode={!!myPlan && isMealReq(r)}
+            mealMode={isMealReq(r)}
             onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} />
         ))}
-        {myPlan && editable && nextExtra && (
+        {editable && nextExtra && (
           <AddMealSlot uploading={uploading === nextExtra.id} onPick={(f) => onPick(nextExtra, f)} captureOnly={nextExtra.captureOnly} />
         )}
       </div>
@@ -606,12 +633,24 @@ function StatusBanner({ approved, rejected, complete, note, doneCount, total, ha
   )
 }
 
-function MacroRow({ label, value, unit, target, max }) {
-  const goal = target || 1
-  const pct = Math.min(100, Math.round((value / goal) * 100))
-  // Earn your green: amber while under target, green once you've hit it.
-  const color = target != null && value >= target ? 'var(--green)' : 'var(--amber)'
-  const goalText = max && max !== target ? `${target}–${max}${unit}` : `${target}${unit}`
+// Two modes on purpose. With a target, this is a progress bar you fill (or a
+// ceiling you stay under). WITHOUT one it is just a number — no bar, no
+// colour, nothing implying you did well or badly. Someone who asked to see
+// their fiber did not ask to be graded on it.
+function MacroRow({ label, value, unit, target, max, ceiling }) {
+  if (target == null) {
+    return (
+      <div className="mb-row plain">
+        <span className="mb-label">{label}</span>
+        <span className="mb-num"><b>{value ? `~${value}` : 0}</b>{unit}</span>
+      </div>
+    )
+  }
+  const pct = Math.min(100, Math.round((value / (target || 1)) * 100))
+  // Under a ceiling is good; over a floor is good.
+  const ok = ceiling ? value <= target : value >= target
+  const color = ok ? 'var(--green)' : 'var(--amber)'
+  const goalText = max && max !== target ? `${target}–${max}${unit}` : `${ceiling ? '≤' : ''}${target}${unit}`
   return (
     <div className="mb-row">
       <span className="mb-label">{label}</span>

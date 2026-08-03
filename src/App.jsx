@@ -956,6 +956,11 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
    filled so it reads as "held" instead of "earned". */
 .cal-cell.excused{background:color-mix(in srgb,var(--blue) 16%,transparent);
   border-color:color-mix(in srgb,var(--blue) 60%,transparent);color:var(--text);font-weight:600}
+/* Awareness-mode macro row: a number, no bar, no verdict. */
+.mb-row.plain{justify-content:space-between}
+.mb-more{background:none;border:none;color:var(--muted);font-family:var(--cond);font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;display:inline-flex;align-items:center;gap:3px;
+  padding:4px 0 0;cursor:pointer;align-self:flex-start}
 /* Export sheet: a compact row of what's about to leave the app. */
 .ex-stats{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
 .ex-stats b{color:var(--text);font-family:var(--num-font,var(--cond));font-size:15px;margin-right:3px}

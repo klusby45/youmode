@@ -61,12 +61,20 @@ const nEntry = (r) => r && ({
   // Undefined pre-migration, which reads the same as null everywhere.
   estCarbs: r.est_carbs ?? null, estFat: r.est_fat ?? null,
   estSatFat: r.est_sat_fat ?? null, estFiber: r.est_fiber ?? null,
+  estSodium: r.est_sodium ?? null, estSugar: r.est_sugar ?? null,
 })
 const nPlan = (r) => r && ({
   id: r.id, userId: r.user_id, goalText: r.goal_text, startWeight: r.start_weight,
   targetWeight: r.target_weight, targetDate: r.target_date,
   proteinMin: r.protein_min, proteinMax: r.protein_max,
   calorieTarget: r.calorie_target, rateTarget: r.rate_target, createdAt: r.created_at,
+  // Nutrition preferences, independent of any weight goal. 'aware' = numbers
+  // with no targets; 'targets' = show progress against the fields below.
+  nutritionMode: r.nutrition_mode ?? null,
+  fiberTarget: r.fiber_target ?? null, satFatMax: r.sat_fat_max ?? null,
+  sodiumMax: r.sodium_max ?? null, sugarMax: r.sugar_max ?? null,
+  // A row with no weight fields is nutrition-only, not half-filled.
+  hasBodyGoal: r.target_weight != null || r.rate_target != null,
 })
 const nWeighIn = (r) => r && ({ id: r.id, userId: r.user_id, date: r.weigh_date, weight: Number(r.weight) })
 const nLog = (r) => r && ({
