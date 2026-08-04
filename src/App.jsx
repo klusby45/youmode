@@ -24,6 +24,13 @@ import JudgeQueue from './components/JudgeQueue.jsx'
 // Rides the signed-in tree so its hook order is stable: keeps the native
 // daily reminder scheduled while a challenge is live, cleared otherwise.
 // Renders nothing; no-op on the web.
+// Every per-day number a plan can aim at. Weight fields are deliberately not
+// here: those belong to a single body goal, not to the merged daily bar.
+const TARGET_FIELDS = [
+  'nutritionMode', 'proteinMin', 'proteinMax', 'calorieTarget',
+  'fiberTarget', 'satFatMax', 'sodiumMax', 'sugarMax',
+]
+
 function ReminderSync({ on }) {
   useEffect(() => { syncDailyReminder(on) }, [on])
   return null
@@ -332,13 +339,24 @@ export default function App() {
   const plans = active.plans || []
   const weighIns = active.weighIns || []
   const myPlans = plans.filter((p) => p.userId === me.id)
-  // Newest plan drives the daily macro bar (one diet at a time, many goals).
   const myPlan = myPlans[myPlans.length - 1] || null
+
+  // Daily targets merge across plans, field by field: the newest plan that
+  // sets a field owns that field, and a field nobody sets stays unset.
+  //
+  // Taking the newest plan whole was wrong. Adding "keep saturated fat under
+  // 20g" wiped the protein and calorie targets that had been on the Today bar
+  // a moment earlier, because the new plan simply had nothing in those slots.
+  // Nobody asked for those to go away, so they don't.
+  const myTargets = myPlans.reduce((acc, p) => {
+    for (const k of TARGET_FIELDS) if (p[k] != null) acc[k] = p[k]
+    return acc
+  }, {})
 
   const ctx = {
     cfg, challenge: active.challenge, members: themedMembers, participants,
     requirements: active.requirements, logs: active.logs,
-    plans, weighIns, myPlan, myPlans,
+    plans, weighIns, myPlan, myPlans, myTargets,
     me, myMember, isReferee, summaries, reqsFor, logsFor, daysFor, maxDays, actions,
     t, tone,
     theme, mode: themeMode(theme), // 'soft' (Linen) | 'dark' — screens branch layout on this
@@ -963,6 +981,8 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   padding:4px 0 0;cursor:pointer;align-self:flex-start}
 /* Blood work: the reviewable marker list, shown in the coach thread. */
 .lab-list{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow-y:auto}
+/* Daily-targets card: chips, no weight furniture. */
+.tg-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}
 .lab-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r-sm);
   background:var(--panel-2);border:1px solid transparent}
 .lab-row.flag{border-color:color-mix(in srgb,var(--amber) 50%,transparent);

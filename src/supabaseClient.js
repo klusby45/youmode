@@ -575,14 +575,14 @@ export async function deleteBodyPlan(planId) {
   if (error) throw error
 }
 
-export async function coachChat(messages) {
+export async function coachChat(messages, labNote = null) {
   const { data } = await supabase.auth.getSession()
   const token = data?.session?.access_token
   if (!token) throw new Error('not signed in')
   const res = await fetch(`${API_BASE}/api/goal-coach`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, labNote }),
   })
   if (!res.ok) throw new Error('coach unavailable')
   return res.json() // { reply, proposal }

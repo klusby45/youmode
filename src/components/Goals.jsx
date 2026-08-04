@@ -22,10 +22,12 @@ export default function Goals() {
         return (
           <div key={p.id}>
             {p.goalLabel && <GoalCard p={p} />}
-            {theirPlans.map((plan, i) => (
+            {theirPlans.map((plan) => (plan.hasBodyGoal ? (
               <BodyGoalCard key={plan.id} plan={plan} name={p.displayName} accent={p.accent}
-                showWeighIn={i === theirPlans.length - 1} />
-            ))}
+                showWeighIn={plan.id === lastBody(theirPlans)} />
+            ) : (
+              <TargetsCard key={plan.id} plan={plan} name={p.displayName} accent={p.accent} />
+            )))}
           </div>
         )
       })}
@@ -49,6 +51,8 @@ export default function Goals() {
   )
 }
 
+// One weigh-in box, on the newest goal that actually tracks weight.
+const lastBody = (list) => list.filter((p) => p.hasBodyGoal).slice(-1)[0]?.id
 const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
 const wash = (accent) => ({ '--gc-wash': `color-mix(in srgb, ${accent} 9%, transparent)` })
 
@@ -175,6 +179,50 @@ function GoalCard({ p }) {
 }
 
 // ── body goal: targets, weigh-ins, trend, pace ─────────────────────────────
+// A plan with no weight and no pace is a set of daily targets, not a body
+// goal. Rendered through BodyGoalCard it came out as "lbs · lean gain" over
+// "–g protein · 0 cal/day", with a weigh-in box and a weight trend line
+// attached to a goal about saturated fat. Same data, honest shape.
+function TargetsCard({ plan, name, accent }) {
+  const { me, actions } = useApp()
+  const mine = plan.userId === me.id
+  const n = (v) => Number(v).toLocaleString()
+  const chips = [
+    plan.proteinMin != null && `${plan.proteinMin}${plan.proteinMax ? `–${plan.proteinMax}` : ''}g protein`,
+    plan.calorieTarget != null && `${n(plan.calorieTarget)} cal/day`,
+    plan.fiberTarget != null && `${plan.fiberTarget}g fiber or more`,
+    plan.satFatMax != null && `${plan.satFatMax}g saturated fat or less`,
+    plan.sodiumMax != null && `${n(plan.sodiumMax)}mg sodium or less`,
+    plan.sugarMax != null && `${plan.sugarMax}g added sugar or less`,
+  ].filter(Boolean)
+
+  async function remove() {
+    if (!mine || !window.confirm(`Remove this goal (${plan.goalText})?`)) return
+    await api.deleteBodyPlan(plan.id)
+    await actions.refresh()
+  }
+
+  return (
+    <div className="goal-card" style={wash(accent)}>
+      <div className="goal-top">
+        <span className="vs-dot" style={{ background: accent, boxShadow: `0 0 8px ${accent}` }} />
+        <span className="goal-name">{name} · Daily targets</span>
+        {mine && (
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <span className="chip chip-muted">You</span>
+            <button className="iconbtn" onClick={remove} aria-label="Remove goal"><Icon name="x" size={14} /></button>
+          </span>
+        )}
+      </div>
+      <div className="muted" style={{ fontSize: 14 }}>{plan.goalText}</div>
+      <div className="tg-chips">
+        {chips.map((c) => <span key={c} className="chip chip-muted">{c}</span>)}
+      </div>
+      <div className="bg-hint" style={{ marginTop: 2 }}>tracked on Today from your meal photos</div>
+    </div>
+  )
+}
+
 function BodyGoalCard({ plan, name, accent, showWeighIn = true }) {
   const { me, cfg, weighIns, actions, members, isReferee } = useApp()
   const mine = plan.userId === me.id

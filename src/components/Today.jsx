@@ -11,7 +11,7 @@ import Sheet from './Sheet.jsx'
 import DayComplete from './DayComplete.jsx'
 
 export default function Today() {
-  const { cfg, me, logs, reqsFor, actions, challenge, daysFor, myPlan, t, mode, summaries, myMember } = useApp()
+  const { cfg, me, logs, reqsFor, actions, challenge, daysFor, myPlan, myTargets, t, mode, summaries, myMember } = useApp()
   const myDays = daysFor(me.id)
   const [uploading, setUploading] = useState(null)
   const [saving, setSaving] = useState(null) // requirement id of an in-flight check
@@ -202,7 +202,7 @@ export default function Today() {
     carbs: tot('estCarbs'), fat: tot('estFat'), sodium: tot('estSodium'), sugar: tot('estSugar'),
   }
   const hasMacros = meals.some(({ entry }) => entry.estCalories != null)
-  const showNutrition = hasMacros && myPlan?.nutritionMode !== 'off'
+  const showNutrition = hasMacros && myTargets.nutritionMode !== 'off'
   const flagged = reqs
     .map((r) => ({ req: r, entry: log?.entriesByReq?.[r.id] }))
     .filter(({ entry }) => entry?.aiFlag && !entry.aiDismissed)
@@ -237,21 +237,21 @@ export default function Today() {
       {showNutrition && (
         <div className="macrobar">
           <MacroRow label="Protein" value={macros.protein} unit="g"
-            target={myPlan?.proteinMin} max={myPlan?.proteinMax} />
+            target={myTargets.proteinMin} max={myTargets.proteinMax} />
           <MacroRow label="Calories" value={macros.calories} unit=""
-            target={myPlan?.calorieTarget} />
+            target={myTargets.calorieTarget} />
           <MacroRow label="Fiber" value={macros.fiber} unit="g"
-            target={myPlan?.fiberTarget} />
+            target={myTargets.fiberTarget} />
           {/* Saturated fat is the one where less is better, so it reads as a
               ceiling rather than something to fill up. */}
           <MacroRow label="Sat fat" value={macros.satFat} unit="g"
-            target={myPlan?.satFatMax} ceiling />
+            target={myTargets.satFatMax} ceiling />
           {more && (
             <>
               <MacroRow label="Carbs" value={macros.carbs} unit="g" />
               <MacroRow label="Total fat" value={macros.fat} unit="g" />
-              <MacroRow label="Sodium" value={macros.sodium} unit="mg" target={myPlan?.sodiumMax} ceiling />
-              <MacroRow label="Sugar" value={macros.sugar} unit="g" target={myPlan?.sugarMax} ceiling />
+              <MacroRow label="Sodium" value={macros.sodium} unit="mg" target={myTargets.sodiumMax} ceiling />
+              <MacroRow label="Sugar" value={macros.sugar} unit="g" target={myTargets.sugarMax} ceiling />
             </>
           )}
           <button className="mb-more" onClick={() => setMore((v) => !v)}>

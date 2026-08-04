@@ -30,6 +30,20 @@ const READING = [
   [21, 'Long panel. Still going…'],
 ]
 
+// Flat text for the coach's system prompt. A panel still sitting in the review
+// card counts: someone who attaches their results and asks a question in the
+// same breath should not be told the app cannot see them.
+function labNote(draft, onFile) {
+  const panel = draft || onFile
+  if (!panel?.markers?.length) return null
+  const rows = panel.markers
+    .map((m) => `${m.name}: ${m.value}${m.unit ? ' ' + m.unit : ''}`
+      + `${m.ref ? ` (ref ${m.ref})` : ''}${m.flag !== 'normal' ? ` FLAGGED ${m.flag.toUpperCase()}` : ''}`)
+    .join('\n')
+  const when = draft ? `drawn ${panel.drawnOn}, just uploaded` : `drawn ${panel.drawnOn}`
+  return `Panel ${when}:\n${rows}`
+}
+
 export default function GoalCoach({ onClose }) {
   const { me, cfg, actions, myPlans, challenge, t } = useApp()
   const hadPlans = myPlans.length > 0
@@ -135,18 +149,13 @@ export default function GoalCoach({ onClose }) {
     setMsgs(next)
     setBusy(true)
     try {
-      // Give the coach the most recent panel so it can anchor targets to real
-      // numbers instead of asking the member to recite them.
-      const labs = await api.listLabResults(me.id).catch(() => [])
-      const latest = labs[0]
-      const labNote = latest
-        ? `[Their most recent blood work, drawn ${latest.drawnOn}: `
-          + latest.markers.map((m) => `${m.name} ${m.value}${m.unit ? ' ' + m.unit : ''}${m.flag !== 'normal' ? ` (${m.flag})` : ''}`).join('; ')
-          + '. Use these to anchor targets. Do not diagnose or interpret them.]'
-        : null
+      // The panel goes to the coach as context, not as a chat message. A
+      // message got buried as the thread grew; this rides in the system prompt.
+      // A panel that has been read but not yet confirmed counts too, otherwise
+      // asking a question right after attaching gets "I can't see that file".
+      const onFile = labs[0] || (await api.listLabResults(me.id).catch(() => []))[0]
       const outgoing = next.filter((m) => m.content !== GREETING)
-      const { reply, proposal: p } = await api.coachChat(
-        labNote ? [{ role: 'user', content: labNote }, ...outgoing] : outgoing)
+      const { reply, proposal: p } = await api.coachChat(outgoing, labNote(labDraft, onFile))
       setMsgs((xs) => [...xs, { role: 'assistant', content: reply }])
       if (p) setProposal(p)
     } catch {
