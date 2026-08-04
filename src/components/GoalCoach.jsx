@@ -4,9 +4,32 @@ import { todayInTz } from '../lib/challenge.js'
 import * as api from '../data.js'
 import Icon from './Icons.jsx'
 
-// Chat interface for creating or tuning body goals. The coach (server-side)
-// interviews, negotiates, and proposes a structured plan; nothing is saved
-// until the user explicitly accepts the proposal card (add or replace).
+// Chat interface for creating or tuning body goals, and the one place you hand
+// the app anything it should know about you. The coach (server-side) interviews,
+// negotiates, and proposes a structured plan; nothing is saved until the user
+// explicitly accepts the card in the thread.
+//
+// Blood work is attached here rather than in its own screen: setting a target,
+// changing one, and handing over lab numbers are all the same conversation.
+
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onloadend = () => resolve(String(r.result).split(',')[1] || '')
+    r.onerror = reject
+    r.readAsDataURL(file)
+  })
+}
+
+// Reading a full panel takes about twenty seconds. Say where we are, so the
+// wait reads as a wait and not as a hang.
+const READING = [
+  [0, 'Reading the page…'],
+  [6, 'Finding your results…'],
+  [13, 'Checking the numbers…'],
+  [21, 'Long panel. Still going…'],
+]
+
 export default function GoalCoach({ onClose }) {
   const { me, cfg, actions, myPlans, challenge, t } = useApp()
   const hadPlans = myPlans.length > 0
@@ -17,8 +40,21 @@ export default function GoalCoach({ onClose }) {
   const [proposal, setProposal] = useState(null)
   const [accepting, setAccepting] = useState(false)
   const [err, setErr] = useState(null)
+  const [labs, setLabs] = useState([])       // panels already on file
+  const [labDraft, setLabDraft] = useState(null) // read, awaiting confirmation
+  const [reading, setReading] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
   const scrollRef = useRef(null)
   const wrapRef = useRef(null)
+
+  useEffect(() => { api.listLabResults(me.id).then(setLabs).catch(() => {}) }, [me.id])
+
+  useEffect(() => {
+    if (!reading) return
+    setElapsed(0)
+    const id = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [reading])
 
   // Body scroll lock + iOS keyboard handling. The overlay is pinned to the
   // *visual* viewport (height AND offsetTop) so when the keyboard opens the
@@ -52,7 +88,43 @@ export default function GoalCoach({ onClose }) {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [msgs, proposal, busy])
+  }, [msgs, proposal, busy, labDraft, reading])
+
+  // Read the file in flight and show what came back. Nothing is stored yet:
+  // a silently misread ApoB would set a wrong target with no way to trace it,
+  // so the numbers go on screen before they go in the database.
+  async function onPick(file) {
+    if (!file || reading) return
+    setErr(null)
+    setReading(true)
+    setMsgs((xs) => [...xs, { role: 'user', content: `Attached ${file.name || 'my results'}` }])
+    try {
+      const b64 = await toBase64(file)
+      const out = await api.extractLabs(b64, file.type, cfg.todayStr)
+      setLabDraft({ ...out, drawnOn: out.drawnOn || cfg.todayStr })
+    } catch (e) {
+      setErr(e.message || 'Could not read that file.')
+    } finally {
+      setReading(false)
+    }
+  }
+
+  async function saveLabs() {
+    setAccepting(true)
+    setErr(null)
+    try {
+      await api.saveLabResult(me.id, labDraft)
+      setLabs(await api.listLabResults(me.id))
+      setLabDraft(null)
+      setMsgs((xs) => [...xs, { role: 'assistant', content: 'Saved. Ask me for a target and I will use these.' }])
+    } catch (e) {
+      setErr(/relation|does not exist/i.test(e.message || '')
+        ? "Results aren't switched on yet. Try again once the update lands."
+        : e.message)
+    } finally {
+      setAccepting(false)
+    }
+  }
 
   async function send() {
     const text = input.trim()
@@ -117,11 +189,69 @@ export default function GoalCoach({ onClose }) {
         <button className="iconbtn" onClick={onClose} aria-label="Close"><Icon name="x" size={18} /></button>
       </div>
 
+      {/* What the coach already knows, and the only place to take it back. */}
+      {labs.length > 0 && !labDraft && (
+        <div className="coach-labs">
+          <Icon name="check" size={13} />
+          <span>Blood work on file · {labs[0].drawnOn}</span>
+          <button className="lr-x" aria-label="Remove blood work"
+            onClick={async () => {
+              await api.deleteLabResult(labs[0].id).catch(() => {})
+              setLabs(await api.listLabResults(me.id).catch(() => []))
+            }}>
+            <Icon name="x" size={13} />
+          </button>
+        </div>
+      )}
+
       <div className="coach-msgs" ref={scrollRef}>
         {msgs.map((m, i) => (
           <div key={i} className={'cm ' + (m.role === 'user' ? 'user' : 'ai')}>{m.content}</div>
         ))}
         {busy && <div className="cm ai thinking">thinking…</div>}
+        {reading && (
+          <div className="cm ai">
+            <div className="lab-bar"><i /></div>
+            {READING.filter(([at]) => elapsed >= at).pop()[1]}
+          </div>
+        )}
+
+        {labDraft && (
+          <div className="plan-preview">
+            <div className="pp-title"><Icon name="upload" size={14} />Your results</div>
+            <div className="lab-draft-head">
+              <span>Check these, then save. Remove anything that reads wrong.</span>
+              <input className="fr-input lab-date" type="date" value={labDraft.drawnOn}
+                aria-label="Drawn on"
+                onChange={(e) => setLabDraft((d) => ({ ...d, drawnOn: e.target.value }))} />
+            </div>
+            <div className="lab-list">
+              {labDraft.markers.map((m, i) => (
+                <div key={i} className={'lab-row' + (m.flag !== 'normal' ? ' flag' : '')}>
+                  <span className="lr-name">{m.name}</span>
+                  <span className="lr-val">
+                    <b>{m.value}</b>{m.unit ? ` ${m.unit}` : ''}
+                    {m.ref ? <small> · ref {m.ref}</small> : null}
+                  </span>
+                  <button className="lr-x" aria-label={`Remove ${m.name}`}
+                    onClick={() => setLabDraft((d) => ({ ...d, markers: d.markers.filter((_, j) => j !== i) }))}>
+                    <Icon name="x" size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="review-actions" style={{ marginTop: 12 }}>
+              <button className="btn btn-ghost" disabled={accepting} onClick={() => setLabDraft(null)}>Discard</button>
+              <button className="btn btn-go" disabled={accepting || !labDraft.markers.length} onClick={saveLabs}>
+                {accepting ? 'Saving…' : `Save ${labDraft.markers.length}`}
+              </button>
+            </div>
+            <p className="muted" style={{ fontSize: 12, margin: '10px 2px 0', lineHeight: 1.5 }}>
+              {labDraft.partial ? 'Long panel, so this is the out-of-range results plus the main ones. ' : ''}
+              The file is not stored. These are your numbers, not advice.
+            </p>
+          </div>
+        )}
 
         {proposal && (
           <div className="plan-preview">
@@ -155,6 +285,11 @@ export default function GoalCoach({ onClose }) {
       </div>
 
       <div className="coach-input">
+        <label className="coach-clip" aria-label="Attach blood work" title="Attach blood work">
+          <Icon name="upload" size={17} />
+          <input type="file" accept="image/*,application/pdf" disabled={reading}
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onPick(f) }} />
+        </label>
         <input value={input} placeholder="Describe your goal…" disabled={busy}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') send() }} />

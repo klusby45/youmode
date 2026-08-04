@@ -961,12 +961,7 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .mb-more{background:none;border:none;color:var(--muted);font-family:var(--cond);font-size:11px;
   letter-spacing:.12em;text-transform:uppercase;display:inline-flex;align-items:center;gap:3px;
   padding:4px 0 0;cursor:pointer;align-self:flex-start}
-/* Blood work: upload target + the reviewable marker list. */
-.lab-drop{display:flex;flex-direction:column;align-items:center;gap:5px;padding:26px 18px;cursor:pointer;
-  border:1px dashed var(--line-2);border-radius:var(--r);background:var(--panel);text-align:center}
-.lab-drop input{display:none}
-.lab-drop .ld-title{font-weight:650;font-size:14px;margin-top:4px}
-.lab-drop .ld-sub{color:var(--muted);font-size:12px}
+/* Blood work: the reviewable marker list, shown in the coach thread. */
 .lab-list{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow-y:auto}
 .lab-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r-sm);
   background:var(--panel-2);border:1px solid transparent}
@@ -977,13 +972,20 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .lab-row .lr-val b{color:var(--text);font-size:14px}
 .lab-row .lr-val small{font-size:11px}
 .lr-x{background:none;border:none;color:var(--muted-2);cursor:pointer;padding:2px;display:flex}
-.lab-saved{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-top:6px;
-  border-radius:var(--r-sm);background:var(--panel-2);font-size:13px}
-.lab-saved span:first-child{flex:1}
-.lab-entry .gc-ic{color:var(--brand)}
-/* Reading a panel takes 20 seconds or so. A still card that long reads as
+/* Attach lives in the composer, so handing over a file is the same gesture
+   as saying something. */
+.coach-clip{display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+  width:34px;height:34px;border-radius:50%;color:var(--muted);cursor:pointer}
+.coach-clip:active{background:var(--panel-2)}
+.coach-clip input{display:none}
+.coach-labs{display:flex;align-items:center;gap:7px;padding:6px 14px;font-size:12px;
+  color:var(--muted);border-bottom:1px solid var(--line)}
+.coach-labs span{flex:1}
+.lab-draft-head{display:flex;align-items:center;gap:10px;margin:2px 0 10px;
+  font-size:12px;color:var(--muted);line-height:1.45}
+.lab-draft-head .lab-date{flex:0 0 auto;width:auto;font-size:12px;padding:5px 8px}
+/* Reading a panel takes 20 seconds or so. A still bubble that long reads as
    frozen, so the bar keeps moving and the line says where we are. */
-.lab-reading{padding:22px 18px}
 .lab-bar{height:3px;border-radius:2px;background:var(--panel-2);overflow:hidden;margin-bottom:12px}
 .lab-bar i{display:block;height:100%;width:38%;border-radius:2px;background:var(--brand);
   animation:labslide 1.5s ease-in-out infinite}
