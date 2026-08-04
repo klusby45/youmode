@@ -981,6 +981,14 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   border-radius:var(--r-sm);background:var(--panel-2);font-size:13px}
 .lab-saved span:first-child{flex:1}
 .lab-entry .gc-ic{color:var(--brand)}
+/* Reading a panel takes 20 seconds or so. A still card that long reads as
+   frozen, so the bar keeps moving and the line says where we are. */
+.lab-reading{padding:22px 18px}
+.lab-bar{height:3px;border-radius:2px;background:var(--panel-2);overflow:hidden;margin-bottom:12px}
+.lab-bar i{display:block;height:100%;width:38%;border-radius:2px;background:var(--brand);
+  animation:labslide 1.5s ease-in-out infinite}
+@keyframes labslide{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
+@media (prefers-reduced-motion:reduce){.lab-bar i{animation:none;width:100%;opacity:.4}}
 /* Export sheet: a compact row of what's about to leave the app. */
 .ex-stats{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
 .ex-stats b{color:var(--text);font-family:var(--num-font,var(--cond));font-size:15px;margin-right:3px}

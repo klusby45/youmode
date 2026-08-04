@@ -20,6 +20,15 @@ function toBase64(file) {
   })
 }
 
+// Reading a full panel takes about twenty seconds. Saying so, and saying where
+// we are, is the difference between waiting and wondering if it broke.
+const READING = [
+  [0, 'Reading the page…'],
+  [6, 'Finding your results…'],
+  [13, 'Checking the numbers…'],
+  [21, 'Long panel. Still going…'],
+]
+
 export default function LabSheet({ onClose }) {
   const { me, cfg } = useApp()
   const [stage, setStage] = useState('pick') // pick | reading | review | saved
@@ -27,8 +36,16 @@ export default function LabSheet({ onClose }) {
   const [draft, setDraft] = useState(null) // { drawnOn, panelName, markers }
   const [saved, setSaved] = useState([])
   const [busy, setBusy] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => { api.listLabResults(me.id).then(setSaved).catch(() => {}) }, [me.id])
+
+  useEffect(() => {
+    if (stage !== 'reading') return
+    setElapsed(0)
+    const id = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [stage])
 
   async function onPick(file) {
     if (!file) return
@@ -85,8 +102,11 @@ export default function LabSheet({ onClose }) {
       )}
 
       {stage === 'reading' && (
-        <div className="card center" style={{ padding: 22 }}>
-          <div className="muted" style={{ fontSize: 13 }}>Reading your results…</div>
+        <div className="card lab-reading">
+          <div className="lab-bar"><i /></div>
+          <div className="muted" style={{ fontSize: 13, textAlign: 'center' }}>
+            {READING.filter(([at]) => elapsed >= at).pop()[1]}
+          </div>
         </div>
       )}
 
