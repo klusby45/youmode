@@ -70,3 +70,30 @@ export function detectTimezone() {
 export function slugify(label) {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'item'
 }
+
+// A logged plate's estimates, ordered the way people read them. Used by the
+// photo viewer and anywhere else a single meal needs to show its numbers.
+// Returns [label, value] pairs, skipping whatever was never estimated.
+export function mealStats(e) {
+  if (!e) return []
+  return [
+    ['protein', e.estProtein != null && `${e.estProtein}g`],
+    ['calories', e.estCalories != null && `${e.estCalories}`],
+    ['carbs', e.estCarbs != null && `${e.estCarbs}g`],
+    ['fat', e.estFat != null && `${e.estFat}g`],
+    ['sat fat', e.estSatFat != null && `${e.estSatFat}g`],
+    ['fiber', e.estFiber != null && `${e.estFiber}g`],
+    ['sodium', e.estSodium != null && `${e.estSodium}mg`],
+    ['sugar', e.estSugar != null && `${e.estSugar}g`],
+  ].filter(([, v]) => v).map(([k, v]) => [k, v])
+}
+
+// Body-progress photos: the ones a "see your progress" reel is made of.
+// Deliberately narrow. A weigh-in photo is a scale, not a physique shot, and
+// "bodyweight workout" is a workout.
+export const isProgressReq = (r) =>
+  r.kind === 'photo' && (
+    /^progress/i.test(r.key || '') ||
+    /progress photo|physique|mirror|before and after/i.test(r.label || '') ||
+    /^progress$/i.test(r.group || '')
+  )

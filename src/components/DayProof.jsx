@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../appContext.js'
-import { isMealReq } from '../config.js'
+import { isMealReq, mealStats } from '../config.js'
 import { isExtraMeal } from '../data.js'
 import { canSeePhotos } from '../lib/privacy.js'
 import { dayState, logDone, logTotal, entrySatisfies, mealProgress, daysBetween, canEditDay, SAVE_WINDOW_DAYS } from '../lib/challenge.js'
@@ -264,7 +264,7 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
             const label = paths.length > 1 ? `${r.label} · ${i + 1}/${paths.length}` : r.label
             return (
               <div key={`${r.id}-${i}`} className={'modal-photo' + (p ? ' tappable' : '')}
-                onClick={() => p && setZoom({ path: p, label })}>
+                onClick={() => p && setZoom({ path: p, label, caption: e?.caption, stats: isMealReq(r) ? mealStats(e) : [] })}>
                 {p ? <ProofImage path={p} alt={label} /> : (
                   <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: 'var(--muted-2)' }}>
                     <Icon name={r.icon || 'camera'} size={22} />
@@ -309,7 +309,7 @@ export default function DayProof({ profile, reqs, dayNumber, date, log, cfg, tot
 
       <button className="btn btn-ghost btn-block" style={{ marginTop: 16 }} onClick={onClose}>Close</button>
 
-      {zoom && <Lightbox path={zoom.path} label={zoom.label} onClose={() => setZoom(null)} />}
+      {zoom && <Lightbox path={zoom.path} label={zoom.label} caption={zoom.caption} stats={zoom.stats} onClose={() => setZoom(null)} />}
 
       {captioning && (
         <CaptionSheet req={captioning.req} entry={captioning.entry}

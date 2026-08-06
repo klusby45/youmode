@@ -5,7 +5,7 @@ import ProofImage from './ProofImage.jsx'
 
 // Full-screen photo viewer: pinch to zoom, drag to pan (when zoomed),
 // double-tap to toggle zoom, swipe down (unzoomed) or ✕ to close.
-export default function Lightbox({ path, label, onClose }) {
+export default function Lightbox({ path, label, caption, stats, onClose }) {
   const tRef = useRef({ s: 1, x: 0, y: 0 })
   const dragRef = useRef(0)
   const [, force] = useState(0)
@@ -99,6 +99,21 @@ export default function Lightbox({ path, label, onClose }) {
       >
         <ProofImage path={path} alt={label} />
       </div>
+      {/* What the app already estimated for this plate. It was on the Today
+          tile the day it was logged and then only reachable as a total, so a
+          photo you tap weeks later could not tell you what was in it. Hidden
+          while zoomed, since then you are looking at the food. */}
+      {stats?.length > 0 && s <= 1.02 && (
+        <div className="lb-stats">
+          {caption && <div className="lbs-cap">{caption}</div>}
+          <div className="lbs-grid">
+            {stats.map(([k, v]) => (
+              <div key={k} className="lbs-item"><b>{v}</b><span>{k}</span></div>
+            ))}
+          </div>
+          <div className="lbs-note">estimated from the photo and your description</div>
+        </div>
+      )}
       {label && <div className="lb-cap">{label} · pinch or double-tap to zoom</div>}
     </div>,
     document.body

@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useApp } from '../appContext.js'
 import { dayDate, currentDayNumber } from '../lib/challenge.js'
+import { isProgressReq } from '../config.js'
 import DayProof from './DayProof.jsx'
+import ProgressReel from './ProgressReel.jsx'
 import Sheet from './Sheet.jsx'
 import Icon from './Icons.jsx'
 
@@ -10,6 +12,27 @@ export default function History() {
   const dayNum = currentDayNumber(cfg.startStr, cfg.todayStr)
   const [sel, setSel] = useState(null) // { p, n, date, log }
   const [extending, setExtending] = useState(false)
+  const [reel, setReel] = useState(null) // [{ path, day, date }]
+
+  // Your own progress photos, oldest first. Only your own: someone else's
+  // body shots are theirs, and a reel is a different act from glancing at
+  // one day's proof.
+  function myShots() {
+    const s = summaries[me.id]
+    if (!s) return []
+    const reqs = reqsFor(me.id).filter(isProgressReq)
+    if (!reqs.length) return []
+    const out = []
+    for (let n = 1; n <= daysFor(me.id); n++) {
+      const log = s.logsByDate[dayDate(cfg.startStr, n)]
+      for (const r of reqs) {
+        const e = log?.entriesByReq?.[r.id]
+        const path = e?.photoPaths?.[0] || e?.photoPath
+        if (path) out.push({ path, day: n, date: dayDate(cfg.startStr, n) })
+      }
+    }
+    return out
+  }
 
   return (
     <div>
@@ -58,6 +81,22 @@ export default function History() {
         )
       })}
 
+      {!isReferee && (() => {
+        const shots = myShots()
+        // Two photos is the first moment there is anything to compare.
+        return shots.length >= 2 ? (
+          <button className="goal-create pr-entry" onClick={() => setReel(shots)}>
+            <span className="gc-stars" aria-hidden="true"><i /><i /><i /><i /></span>
+            <span className="gc-ic"><Icon name="camera" size={20} /></span>
+            <span className="gc-txt">
+              <b>See your progress</b>
+              <small>Day {shots[0].day} next to day {shots[shots.length - 1].day}, and every shot in between.</small>
+            </span>
+            <Icon name="chevron" size={16} />
+          </button>
+        ) : null
+      })()}
+
       <div className="legend">
         <span><i style={{ background: 'var(--green)' }} />Approved</span>
         <span><i style={{ background: 'var(--amber)' }} />Awaiting referee</span>
@@ -77,6 +116,7 @@ export default function History() {
           log={logsFor(sel.p.userId).find((l) => l.logDate === sel.date) || sel.log}
           cfg={cfg} totalDays={daysFor(sel.p.userId)} onClose={() => setSel(null)} />
       )}
+      {reel && <ProgressReel shots={reel} name={participants.find((p) => p.userId === me.id)?.displayName || 'You'} onClose={() => setReel(null)} />}
       {extending && (
         <AddDays current={daysFor(me.id)} memberId={myMember.id} cfg={cfg} t={t}
           refresh={actions.refresh} update={actions.updateMyMember} onClose={() => setExtending(false)} />

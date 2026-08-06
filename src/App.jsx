@@ -981,6 +981,33 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   padding:4px 0 0;cursor:pointer;align-self:flex-start}
 /* Blood work: the reviewable marker list, shown in the coach thread. */
 .lab-list{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow-y:auto}
+/* Meal stats over the photo: what the app estimated for this plate. */
+.lb-stats{position:absolute;left:0;right:0;bottom:52px;padding:14px 16px 12px;z-index:3;
+  background:linear-gradient(to top,rgba(10,9,8,.94),rgba(10,9,8,.7) 70%,transparent);color:#f2ece3}
+.lbs-cap{font-size:13px;line-height:1.45;margin-bottom:10px;opacity:.92}
+.lbs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:8px 6px}
+.lbs-item{display:flex;flex-direction:column;gap:1px}
+.lbs-item b{font-family:var(--num-font,var(--cond));font-size:17px;line-height:1.1}
+.lbs-item span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.6}
+.lbs-note{font-size:10.5px;opacity:.5;margin-top:9px}
+/* Progress reel: day one beside today, then everything in between. */
+.pr-entry .gc-ic{color:var(--brand)}
+.pr-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pr-pair figure{margin:0;position:relative;aspect-ratio:3/4;border-radius:var(--r);overflow:hidden;background:var(--panel-2)}
+.pr-pair figure img{width:100%;height:100%;object-fit:cover;display:block}
+.pr-pair figcaption{position:absolute;left:0;right:0;bottom:0;padding:14px 8px 6px;color:#fff;font-size:12px;
+  font-weight:650;text-align:center;background:linear-gradient(to top,rgba(0,0,0,.6),transparent)}
+.pr-strip{display:flex;gap:6px;overflow-x:auto;margin:12px 0 8px;padding-bottom:4px;scrollbar-width:none}
+.pr-strip::-webkit-scrollbar{display:none}
+.pr-thumb{position:relative;flex:0 0 52px;height:66px;padding:0;border:2px solid transparent;border-radius:8px;
+  overflow:hidden;background:var(--panel-2);cursor:pointer}
+.pr-thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:.55}
+.pr-thumb.on{border-color:var(--brand)}
+.pr-thumb.on img{opacity:1}
+.pr-thumb span{position:absolute;left:0;right:0;bottom:0;font-size:9px;color:#fff;text-align:center;
+  background:rgba(0,0,0,.55);padding:1px 0}
+.pr-scrub{display:flex;align-items:center;gap:8px}
+.pr-scrub input{flex:1;accent-color:var(--brand)}
 /* Daily-targets card: chips, no weight furniture. */
 .tg-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}
 .lab-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r-sm);
