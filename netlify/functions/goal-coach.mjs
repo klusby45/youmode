@@ -19,6 +19,8 @@ How to behave:
 - Ask AT MOST one clarifying question per message, and only what you actually need: current weight, height, rough activity level, timeline. If they already gave enough, propose immediately.
 - BE HONEST ABOUT FEASIBILITY. Sustainable fat loss ≈ 0.5-1% of bodyweight/week; lean muscle gain ≈ 0.25-0.5 lb/week for most trained people. If their timeline is unrealistic, say so plainly and propose the honest version (right goal, adjusted date or target). Never rubber-stamp an infeasible goal.
 - SAFETY FLOORS (hard rules): never propose under 1,400 calories/day; never propose loss faster than 1% bodyweight/week; protein 0.7-1g per lb of target weight. If the request pattern-matches disordered eating, or the user appears to be a minor, or mentions pregnancy, an eating disorder history, diabetes, or medications: do NOT propose a plan. Warmly recommend they work with a doctor or registered dietitian instead.
+- YOU CAN SEE THEIR FOOD LOG. If a NUTRITION LOG block appears below it holds their real logged meals with this app's photo estimates. Answer questions about what they ate from those rows, by name and by number. "I can't see your meals" is never true when that block is present.
+- A QUESTION IS NOT A GOAL REQUEST. "How could I have cut saturated fat today" wants an answer about today's food, not a new plan. Answer it with specific swaps for the specific meals they logged, and stop. Only reach for the tool when a target genuinely should change, and when you do, say which number is moving and why.
 - SCOPE: you only plan body-composition and nutrition goals. The app tracks daily meal photos with AI estimates of calories, protein, carbs, total fat, SATURATED FAT, FIBER, SODIUM and SUGAR, plus optional weekly weigh-ins with a trend line. You cannot track anything else. If asked for other goal types, say what you can and can't hold them to. For off-topic requests (homework, emails, general chat), politely decline and steer back.
 - A NUTRITION GOAL DOES NOT REQUIRE A WEIGHT GOAL. Plenty of people want to raise fiber, cut saturated fat, or lower sodium with no interest in the scale. When that is what they want, set mode 'targets', fill only the nutrient fields that matter, and leave every weight field out. Never invent a target weight to make a plan look complete.
 - Never use em dashes. Use a comma, a period, or a colon.
@@ -52,6 +54,88 @@ const TOOL = {
       rate_target: { type: 'number', description: 'Target lbs per week; negative = loss' },
     },
   },
+}
+
+// ── the food log ─────────────────────────────────────────────────────────
+// Detail decays with age, because that is how the questions decay: today gets
+// every meal and every macro, the past week gets a line a day, the rest of the
+// month gets totals worth trending against.
+const DETAIL_DAYS = 7
+const WINDOW_DAYS = 30
+
+const ymd = (d) => d.toISOString().slice(0, 10)
+const daysAgo = (n) => ymd(new Date(Date.now() - n * 86400000))
+
+function macroLine(e) {
+  const bits = [
+    e.est_protein != null && `${e.est_protein}g protein`,
+    e.est_calories != null && `${e.est_calories} cal`,
+    e.est_sat_fat != null && `${e.est_sat_fat}g sat fat`,
+    e.est_fiber != null && `${e.est_fiber}g fiber`,
+    e.est_sodium != null && `${e.est_sodium}mg sodium`,
+    e.est_sugar != null && `${e.est_sugar}g sugar`,
+  ].filter(Boolean)
+  return bits.join(', ')
+}
+
+const sum = (rows, k) => {
+  const vals = rows.map((r) => r[k]).filter((v) => v != null)
+  return vals.length ? vals.reduce((a, b) => a + Number(b), 0) : null
+}
+const totalLine = (rows) => macroLine({
+  est_protein: sum(rows, 'est_protein'), est_calories: sum(rows, 'est_calories'),
+  est_sat_fat: sum(rows, 'est_sat_fat'), est_fiber: sum(rows, 'est_fiber'),
+})
+
+async function mealBlock(SUPABASE_URL, SERVICE, userId) {
+  const q = `${SUPABASE_URL}/rest/v1/day_logs?user_id=eq.${userId}&log_date=gte.${daysAgo(WINDOW_DAYS)}`
+    + '&select=log_date,log_entries(requirement_id,caption,est_protein,est_calories,est_sat_fat,est_fiber,est_sodium,est_sugar)'
+    + '&order=log_date.desc'
+  const [logsRes, reqsRes] = await Promise.all([
+    fetch(q, { headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` } }),
+    fetch(`${SUPABASE_URL}/rest/v1/requirements?user_id=eq.${userId}&select=id,label,kind&order=sort`,
+      { headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` } }),
+  ])
+  const days = await logsRes.json()
+  const labels = Object.fromEntries((await reqsRes.json()).map((r) => [r.id, r.label]))
+  if (!Array.isArray(days) || !days.length) return ''
+
+  // Only entries carrying an estimate are food; a checked-off workout is not.
+  const eaten = (d) => (d.log_entries || []).filter((e) => e.caption || e.est_calories != null)
+  const withFood = days.filter((d) => eaten(d).length)
+  if (!withFood.length) return ''
+
+  const out = []
+  withFood.slice(0, DETAIL_DAYS).forEach((d, i) => {
+    const rows = eaten(d)
+    out.push(`${i === 0 ? 'MOST RECENT DAY, ' : ''}${d.log_date}:`)
+    for (const e of rows) {
+      const what = (e.caption || '').trim().slice(0, 160) || 'no description'
+      out.push(`  ${labels[e.requirement_id] || 'Meal'}: "${what}" ${macroLine(e) || 'no estimate'}`)
+    }
+    out.push(`  day total: ${totalLine(rows) || 'nothing estimated'}`)
+  })
+
+  const older = withFood.slice(DETAIL_DAYS)
+  if (older.length) {
+    out.push(`\nEarlier days (totals only):`)
+    for (const d of older) out.push(`  ${d.log_date}: ${totalLine(eaten(d)) || 'nothing estimated'}`)
+  }
+
+  // Averages across the window, so "am I usually over" has an answer.
+  const all = withFood.flatMap(eaten)
+  const n = withFood.length
+  const avg = (k) => { const t = sum(all, k); return t == null ? null : Math.round(t / n) }
+  out.push(`\nAverage per day over ${n} logged day${n === 1 ? '' : 's'}: `
+    + macroLine({ est_protein: avg('est_protein'), est_calories: avg('est_calories'), est_sat_fat: avg('est_sat_fat'), est_fiber: avg('est_fiber') }))
+
+  const body = out.join('\n').slice(0, 12000)
+  return `\n\nNUTRITION LOG (their own logged meals, with this app's photo estimates):\n${body}\n`
+    // Superhuman repeats its critical instruction after the data as well as
+    // before it. The failure this fixes was the model claiming blindness while
+    // the answer sat in its context, so the reminder goes where it will be
+    // read last.
+    + `\nYou CAN see the meals above. When they ask what they ate, how a day went, or how they could have hit a target, answer from these rows: name the actual meals, use the actual numbers, and suggest swaps for the specific foods they actually ate. Never say you cannot see their meals or their log. If they ask about a day older than this window, say which dates you can see.`
 }
 
 // Their own results, already read by the app. Bounded and stringified here so
@@ -127,6 +211,17 @@ export default async (req) => {
       }
     } catch { /* plan context is optional */ }
 
+    // Their actual food log. "I can't see individual meals" was a true
+    // statement about a coach that had never been handed the data, and it is
+    // the wrong answer to "look at my meals today": the app knows exactly what
+    // they ate. Superhuman's Ask AI grounds every answer in the user's real
+    // mail rather than deflecting, and needs hybrid search over five years to
+    // do it. A month of meals is small enough to simply hand over.
+    let mealContext = ''
+    try {
+      mealContext = await mealBlock(SUPABASE_URL, SERVICE, user.id)
+    } catch { /* the coach still works without it */ }
+
     // Bounded input: short conversations only (cost + scope containment).
     const { messages, labNote } = await req.json()
     if (!Array.isArray(messages) || !messages.length) return Response.json({ error: 'messages required' }, { status: 400, headers: H })
@@ -147,7 +242,7 @@ export default async (req) => {
         // message they sat at position 0, lost weight as the thread grew, and
         // fell off entirely once slice(-24) kicked in, which is how the coach
         // ended up asking someone to recite numbers it had already read.
-        system: `${SYSTEM}\n\nToday's date: ${today}.${planContext}${labBlock(labNote)}`,
+        system: `${SYSTEM}\n\nToday's date: ${today}.${planContext}${labBlock(labNote)}${mealContext}`,
         tools: [TOOL],
         messages: clean,
       }),
