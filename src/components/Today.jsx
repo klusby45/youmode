@@ -479,8 +479,18 @@ export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, me
       {flagged && <span className="ai-chip"><Icon name="bolt" size={11} />AI flag</span>}
       {req.multi && paths.length > 1 && <span className="slot-stack">{paths.length} photos</span>}
       {req.minMinutes && <span className="slot-min">{req.minMinutes} min</span>}
+      {/* Ask first. This sits in the corner of a tile whose whole surface is a
+          file picker, one thumb-width from where people tap to look at their
+          own photo, and it used to fire on the first touch. A photo is a meal
+          you cooked and remembered to shoot; it does not get thrown away
+          because a tap landed 8px off. */}
       {filled && editable && (
-        <button className="slot-clear" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClear() }} aria-label="Remove photos">
+        <button className="slot-clear" aria-label="Remove photos"
+          onClick={(e) => {
+            e.preventDefault(); e.stopPropagation()
+            const n = paths.length
+            if (window.confirm(`Remove the ${req.label} ${n > 1 ? `photos (${n})` : 'photo'}? Your description and macros stay.`)) onClear()
+          }}>
           <Icon name="x" size={13} strokeWidth={2.5} />
         </button>
       )}
