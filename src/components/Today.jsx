@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useApp } from '../appContext.js'
-import { isMealReq } from '../config.js'
+import { isMealReq, mealStats } from '../config.js'
 import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, checkCount, weeklyProgress, monthlyProgress, mealProgress, SAVE_WINDOW_DAYS } from '../lib/challenge.js'
 import { IS_MOBILE } from '../lib/device.js'
 import { tapHaptic } from '../lib/native.js'
@@ -9,6 +10,7 @@ import Icon from './Icons.jsx'
 import ProofImage from './ProofImage.jsx'
 import Sheet from './Sheet.jsx'
 import DayComplete from './DayComplete.jsx'
+import Lightbox from './Lightbox.jsx'
 
 export default function Today() {
   const { cfg, me, logs, reqsFor, actions, challenge, daysFor, myPlan, myTargets, t, mode, summaries, myMember } = useApp()
@@ -461,12 +463,31 @@ export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, me
   const flagged = entry?.aiFlag && !entry.aiDismissed
   const canAddMore = editable && (!filled || (req.multi && paths.length < api.MAX_PHOTOS_PER_ITEM))
   const showCap = mealMode && filled // caption + macros live on the tile itself
+  const inputRef = useRef(null)
+  const [menu, setMenu] = useState(false)
+  const [viewing, setViewing] = useState(false)
+
+  // A filled tile has more than one reasonable meaning for a tap: look at it,
+  // read what the app estimated, shoot it again, throw it out. It used to do
+  // the last two by accident, so now it asks which one you meant.
+  const canPick = editable && (canAddMore || !req.multi) && IS_MOBILE
+  const useMenu = filled && editable && !uploading
   const hint = uploading ? 'Uploading…'
     : !filled ? (req.hint || 'Photo proof')
+    : useMenu ? 'Tap for options'
     : req.multi ? (canAddMore ? 'Tap to add another' : 'Full set')
     : 'Tap to retake'
   return (
-    <label className={'slot' + (filled ? ' filled' : '') + (uploading ? ' uploading' : '') + (!(editable && (canAddMore || !req.multi)) ? ' locked' : '')}>
+    <label className={'slot' + (filled ? ' filled' : '') + (uploading ? ' uploading' : '') + (!(editable && (canAddMore || !req.multi)) ? ' locked' : '')}
+      onClick={(e) => {
+        if (!useMenu) return
+        // The menu and the viewer are portals, so their clicks land on <body>
+        // but still bubble through the REACT tree to this label. Without this
+        // guard, closing the viewer reopens the menu behind it.
+        if (!e.currentTarget.contains(e.target)) return
+        e.preventDefault() // or the wrapping label fires the file input
+        setMenu(true)
+      }}>
       {filled && <span className="slot-thumb"><ProofImage path={paths[paths.length - 1]} alt={req.label} /></span>}
       {!filled && <span className="slot-ic"><Icon name={req.icon || 'camera'} size={22} /></span>}
       {filled && !flagged && (
@@ -479,21 +500,9 @@ export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, me
       {flagged && <span className="ai-chip"><Icon name="bolt" size={11} />AI flag</span>}
       {req.multi && paths.length > 1 && <span className="slot-stack">{paths.length} photos</span>}
       {req.minMinutes && <span className="slot-min">{req.minMinutes} min</span>}
-      {/* Ask first. This sits in the corner of a tile whose whole surface is a
-          file picker, one thumb-width from where people tap to look at their
-          own photo, and it used to fire on the first touch. A photo is a meal
-          you cooked and remembered to shoot; it does not get thrown away
-          because a tap landed 8px off. */}
-      {filled && editable && (
-        <button className="slot-clear" aria-label="Remove photos"
-          onClick={(e) => {
-            e.preventDefault(); e.stopPropagation()
-            const n = paths.length
-            if (window.confirm(`Remove the ${req.label} ${n > 1 ? `photos (${n})` : 'photo'}? Your description and macros stay.`)) onClear()
-          }}>
-          <Icon name="x" size={13} strokeWidth={2.5} />
-        </button>
-      )}
+      {/* No corner x. Removal lives in the options menu now: a one-tap destroy
+          button in the corner of a tile people tap to look at their own photo
+          is how a logged meal got thrown away. */}
       <span className="slot-label">{req.label}</span>
       {showCap ? (
         <button className={'slot-cap' + (entry?.caption ? '' : ' empty')}
@@ -514,10 +523,58 @@ export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, me
           camera (the keep-yourself-honest mode); otherwise iOS offers
           library/camera/files so screenshots (Oura, watch apps) work too.
           Value reset lets iOS re-fire the picker for the same file. */}
-      {(editable && (canAddMore || !req.multi)) && IS_MOBILE && <input type="file" accept="image/*"
+      {(editable && (canAddMore || !req.multi)) && IS_MOBILE && <input ref={inputRef} type="file" accept="image/*"
         capture={req.captureOnly ? 'environment' : undefined}
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onPick(f) }} />}
+
+      {menu && (
+        <PhotoMenu req={req} count={paths.length} mealMode={mealMode}
+          onClose={() => setMenu(false)}
+          onView={() => { setMenu(false); setViewing(true) }}
+          onCaption={mealMode && onCaption ? () => { setMenu(false); onCaption() } : null}
+          onReplace={canPick ? () => { setMenu(false); inputRef.current?.click() } : null}
+          addMore={req.multi && canAddMore}
+          onRemove={() => { setMenu(false); onClear() }} />
+      )}
+      {viewing && (
+        <Lightbox path={paths[paths.length - 1]} label={req.label}
+          caption={entry?.caption} stats={mealMode ? mealStats(entry) : []}
+          onClose={() => setViewing(false)} />
+      )}
     </label>
+  )
+}
+
+// What to do with a photo you already took. Removal is last, separated, and
+// says what it keeps, because it is the only one you cannot undo.
+function PhotoMenu({ req, count, mealMode, onClose, onView, onCaption, onReplace, addMore, onRemove }) {
+  const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn() }
+  return createPortal(
+    <div className="pm-wrap" onPointerDown={stop(onClose)}>
+      <div className="pm" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="pm-head">{req.label}</div>
+        <button className="pm-item" onClick={stop(onView)}>
+          <Icon name="expand" size={17} />
+          {count > 1 ? `See photo (${count})` : 'See photo'}{mealMode ? ' and macros' : ''}
+        </button>
+        {onCaption && (
+          <button className="pm-item" onClick={stop(onCaption)}>
+            <Icon name="edit" size={17} />Edit description
+          </button>
+        )}
+        {onReplace && (
+          <button className="pm-item" onClick={stop(onReplace)}>
+            <Icon name="camera" size={17} />{addMore ? 'Add another photo' : 'Replace photo'}
+          </button>
+        )}
+        <button className="pm-item danger" onClick={stop(onRemove)}>
+          <Icon name="x" size={17} />Remove {count > 1 ? `photos (${count})` : 'photo'}
+          {mealMode && <small>description and macros stay</small>}
+        </button>
+        <button className="pm-cancel" onClick={stop(onClose)}>Cancel</button>
+      </div>
+    </div>,
+    document.body
   )
 }
 

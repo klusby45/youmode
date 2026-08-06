@@ -1008,6 +1008,23 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   background:rgba(0,0,0,.55);padding:1px 0}
 .pr-scrub{display:flex;align-items:center;gap:8px}
 .pr-scrub input{flex:1;accent-color:var(--brand)}
+/* Photo options: what to do with a shot you already took. */
+.pm-wrap{position:fixed;inset:0;z-index:120;background:color-mix(in srgb,var(--scrim) 60%,transparent);
+  display:flex;align-items:flex-end;justify-content:center;animation:pmfade .14s ease}
+@keyframes pmfade{from{opacity:0}to{opacity:1}}
+.pm{width:100%;max-width:520px;margin:8px;background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--r);overflow:hidden;padding-bottom:env(safe-area-inset-bottom);
+  animation:pmup .18s cubic-bezier(.2,.9,.3,1)}
+@keyframes pmup{from{transform:translateY(14px)}to{transform:translateY(0)}}
+.pm-head{padding:12px 16px 10px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);border-bottom:1px solid var(--line)}
+.pm-item{display:flex;align-items:center;gap:12px;width:100%;padding:15px 16px;background:none;border:none;
+  border-bottom:1px solid var(--line);color:var(--text);font:inherit;font-size:15px;text-align:left;cursor:pointer}
+.pm-item:active{background:var(--panel-2)}
+.pm-item small{margin-left:auto;font-size:11px;color:var(--muted)}
+.pm-item.danger{color:var(--red)}
+.pm-cancel{width:100%;padding:15px 16px;background:none;border:none;color:var(--muted);
+  font:inherit;font-size:15px;font-weight:600;cursor:pointer}
 /* Daily-targets card: chips, no weight furniture. */
 .tg-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}
 .lab-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r-sm);
