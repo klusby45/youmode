@@ -52,8 +52,16 @@ async function handle(req) {
 
     const token = mintToken(prof.id, SERVICE)
     const link = `${APP_URL}/reset?token=${encodeURIComponent(token)}`
-    if (RESEND) {
-      await fetch('https://api.resend.com/emails', {
+    // A send that fails has to be loud. This used to be fire-and-forget with
+    // the error thrown away, so a rejected email and a delivered one looked
+    // identical from every side: the user waited for a link that was never
+    // coming, and nothing anywhere recorded why.
+    if (!RESEND) {
+      console.error('reset: RESEND_API_KEY missing, no email sent')
+      return ok()
+    }
+    {
+      const mail = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,9 +75,16 @@ async function handle(req) {
             <p style="font-size:12px;color:#8a7a6f;line-height:1.5">If you didn't ask for this, you can ignore this email. Your password stays the same.</p>
           </div>`,
         }),
-      }).catch(() => {})
+      }).catch((e) => ({ ok: false, status: 0, text: async () => String(e?.message || e) }))
+      if (!mail.ok) {
+        const detail = await mail.text().catch(() => '')
+        console.error('reset: provider rejected the email', mail.status, detail.slice(0, 400))
+        // The caller still gets the same generic answer (an error here would
+        // confirm the account exists), but the operator gets a real reason.
+        return Response.json({ ok: true, delivered: false })
+      }
     }
-    return ok()
+    return Response.json({ ok: true, delivered: true })
   } catch {
     return Response.json({ ok: true })
   }
