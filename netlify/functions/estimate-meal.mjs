@@ -65,20 +65,32 @@ async function handle(req) {
       if (signed?.signedURL) photoUrls.push(`${SUPABASE_URL}/storage/v1${signed.signedURL}`)
     }
 
-    const aRes = await fetch('https://api.anthropic.com/v1/messages', {
+    // Hard stop on the worked pass so the totals-only retry always has room to
+    // run inside the function's ~30s life. Being cut off with nothing stored is
+    // the failure being fixed here; it must not come back as a timing race
+    // between the two attempts.
+    const ctl = new AbortController()
+    const deadline = setTimeout(() => ctl.abort(), 20000)
+    let aRes = null
+    try { aRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
+      signal: ctl.signal,
       headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        // Itemizing six values per ingredient is a much longer answer than the
-        // original two, and at 700 the model ran out mid-reasoning and never
-        // emitted the closing JSON, which read as "unparseable estimate".
-        max_tokens: 2500,
+        // Itemizing keeps the numbers honest, so it stays. Room to ramble does
+        // not: at 2500 a busy plate took 28 seconds to write out, the function
+        // is killed a little past 30, and a killed request stores nothing and
+        // says nothing. That is what "estimating..." for hours actually was.
+        // Terse lines fit inside this with room to land the totals, and a plate
+        // that still runs long is caught by the totals-only retry below rather
+        // than by picking a luckier number here.
+        max_tokens: 1600,
         system:
           'You estimate nutrition from a meal photo and the eater\'s one-line description. ' +
           'The description is AUTHORITATIVE for what the meal is and the quantities. If it says "6 eggs", estimate 6 eggs even if the photo makes portions hard to judge. ' +
           'Use the photo only to fill in items the description omits and to catch wild mismatches (description says steak, photo shows salad, then estimate the photo). ' +
-          'Work it out step by step before answering. List every distinct food and ingredient on its own line with its own calories, protein, carbohydrate, total fat, SATURATED fat, and fiber, using realistic standard nutrition values. ' +
+          'Work it out before answering, but keep the working TERSE: one short line per food, values only, no prose, no explanation, no restating the question. Format each line exactly like "6oz chicken breast: 280cal 52p 0c 6f 1.7sf 0fb 130na 0sg". Every distinct food and ingredient gets a line, using realistic standard nutrition values. ' +
           'Sodium and sugar: count added and naturally-occurring sugar together, and include salt from sauces, dressings, cured meat, bread and restaurant cooking, which is where most sodium hides. '+
           'Reference points: one large egg is about 75 cal, 6g protein, 5g fat, 1.6g saturated, 0g fiber. 1 tbsp butter about 120 cal and 7g saturated. 1 oz hard cheese about 9g fat and 6g saturated. 4 oz cooked chicken breast about 1g saturated. 4 oz fatty red meat (ribeye, lamb, kefta, birria) about 7 to 9g saturated. Dry rolled oats per half cup about 150 cal, 27g carb, 4g fiber. 1 tbsp chia about 5g fiber. Half a cup of cooked beans about 7g fiber. Half an avocado about 5g fiber. Coconut oil and movie-theater popcorn are unusually high in saturated fat. ' +
           'Include the easy-to-miss items so you do not undercount: cooking oil or butter, sauces, dressings, syrups, and nut butters. But keep every line realistic and do not inflate. Add every line up. ' +
@@ -92,9 +104,11 @@ async function handle(req) {
           ],
         }],
       }),
-    })
-    if (!aRes.ok) return Response.json({ skipped: 'ai unavailable' }, { status: 200 })
-    const ai = await aRes.json()
+    }) } catch { /* aborted at the deadline, or the network blinked */ }
+    clearTimeout(deadline)
+    // A worked pass that died still gets the totals-only retry below. Returning
+    // here is what left meals sitting on "estimating..." with nothing stored.
+    const ai = aRes?.ok ? await aRes.json().catch(() => null) : null
     const text = ai?.content?.find((b) => b.type === 'text')?.text || ''
     // The model itemizes each food first, then emits the totals as the final
     // JSON object. Grab the LAST flat {...} so the reasoning can't fool the parse.
@@ -108,7 +122,15 @@ async function handle(req) {
         if (cand && (Number.isFinite(cand.calories) || Number.isFinite(cand.protein_g))) { est = cand; break }
       } catch { /* keep looking */ }
     }
-    if (!Object.keys(est).length && ai?.stop_reason === 'max_tokens') {
+    // Truncated mid-working, so the totals never arrived. Rather than storing
+    // nothing and leaving the tile saying "estimating..." forever, ask again
+    // for the totals alone. No itemizing, a couple of hundred tokens, a few
+    // seconds. Slightly blunter than the worked version and far better than a
+    // meal that never gets a number.
+    if (!Object.keys(est).length) {
+      est = await totalsOnly({ ANTHROPIC, photoUrls, entry }) || {}
+    }
+    if (!Object.keys(est).length) {
       return Response.json({ skipped: 'truncated before totals' }, { status: 200 })
     }
     const clamp = (v, hi) => (Number.isFinite(v) ? Math.max(0, Math.min(hi, Math.round(v))) : null)
@@ -148,3 +170,39 @@ async function handle(req) {
 }
 
 export const config = { path: '/api/estimate-meal' }
+
+// Fallback pass: the totals and nothing else. Used when the worked estimate
+// runs out of room before it lands the JSON.
+async function totalsOnly({ ANTHROPIC, photoUrls, entry }) {
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 300,
+        system:
+          'You estimate nutrition from a meal photo and the eater\'s description. The description is AUTHORITATIVE for what the meal is and the quantities. ' +
+          'Do not show any working. Include cooking oil, butter, sauces, dressings and restaurant salt, which is where most fat and sodium hide. Saturated fat can never exceed total fat. ' +
+          'Reply with ONLY this JSON and nothing else: {"protein_g": <int>, "calories": <int>, "carbs_g": <int>, "fat_g": <int>, "sat_fat_g": <int>, "fiber_g": <int>, "sodium_mg": <int>, "sugar_g": <int>}',
+        messages: [{
+          role: 'user',
+          content: [
+            ...photoUrls.map((u) => ({ type: 'image', source: { type: 'url', url: u } })),
+            { type: 'text', text: `Meal: "${entry.requirements?.label || 'meal'}". Description: "${entry.caption || '(none)'}". Totals only.` },
+          ],
+        }],
+      }),
+    })
+    if (!r.ok) return null
+    const j = await r.json()
+    const t = j?.content?.find((b) => b.type === 'text')?.text || ''
+    for (const m of (t.match(/\{[^{}]*\}/g) || []).reverse()) {
+      try {
+        const c = JSON.parse(m)
+        if (Number.isFinite(c.calories) || Number.isFinite(c.protein_g)) return c
+      } catch { /* keep looking */ }
+    }
+    return null
+  } catch { return null }
+}

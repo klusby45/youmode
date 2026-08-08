@@ -49,22 +49,52 @@ export default function Today() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complete])
 
-  // Self-heal: a meal that has a caption + photo but no estimate got stranded
-  // (a fire-and-forget estimate silently failed). Retry it once per entry per
-  // session, then refresh to pull the result. Prevents permanent "estimating…".
-  const healed = useRef(new Set())
+  // Self-heal: a meal with a caption and a photo but no estimate got stranded,
+  // because the estimate is fired and forgotten and the phone that fired it may
+  // have been locked, backgrounded, or off wifi before it came back.
+  //
+  // This used to give each entry exactly one retry per session and mark it
+  // spent BEFORE the attempt, so a single bad moment stranded a meal until the
+  // app was killed and reopened. Now it counts real failures, and it tries
+  // again when the app comes back to the foreground, which is exactly when the
+  // network usually returned.
+  const tries = useRef(new Map())
+  const healing = useRef(false)
+  const [awake, setAwake] = useState(0)
   useEffect(() => {
-    if (!log) return
+    const wake = () => { if (document.visibilityState === 'visible') setAwake((n) => n + 1) }
+    document.addEventListener('visibilitychange', wake)
+    window.addEventListener('online', wake)
+    return () => {
+      document.removeEventListener('visibilitychange', wake)
+      window.removeEventListener('online', wake)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!log || healing.current) return
     const stranded = reqs.filter(isMealReq).map((r) => log.entriesByReq?.[r.id]).filter(
-      (e) => e && (e.photoPaths?.length || e.photoPath) && e.caption && e.estProtein == null && !healed.current.has(e.id)
+      (e) => e && (e.photoPaths?.length || e.photoPath) && e.caption && e.estProtein == null
+        && (tries.current.get(e.id) || 0) < 4
     )
     if (!stranded.length) return
-    stranded.forEach((e) => healed.current.add(e.id))
+    healing.current = true
     Promise.allSettled(stranded.map((e) => actions.estimateMeal(e.id)))
-      .then(() => actions.refresh())
+      .then((rs) => {
+        // Only a failure burns an attempt. A success needs no bookkeeping and
+        // a request still in flight was never counted in the first place.
+        rs.forEach((r, i) => {
+          if (r.status === 'rejected') {
+            const id = stranded[i].id
+            tries.current.set(id, (tries.current.get(id) || 0) + 1)
+          }
+        })
+        return actions.refresh()
+      })
       .catch(() => {})
+      .finally(() => { healing.current = false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [log])
+  }, [log, awake])
 
   async function onPick(req, file) {
     if (!file) return
