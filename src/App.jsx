@@ -412,6 +412,8 @@ export default function App() {
             onToggleReq={async (reqId, next) => { await api.setReqPrivacy(reqId, next); await refresh() }}
             showPrivacy={!isReferee}
             email={me.email}
+            displayName={me.displayName}
+            onSaveName={async (v) => { await api.saveDisplayName(me.id, v); await refresh() }}
             onSaveEmail={async (v) => { await api.saveEmail(me.id, v); await refresh() }}
             onDeleteAccount={deleteAccount}
             onEditChecklist={!isReferee ? () => { setYouOpen(false); setEditingList(true) } : null}

@@ -117,8 +117,12 @@ export default function Login({ onAuthed, initialMode = 'signin', onBack }) {
         <div className="au-step" key={mode + step}>
           {mode === 'signup' && step === 0 && (
             <form onSubmit={nextFromUsername}>
-              <h2 className="au-q">What should we call you?</h2>
-              <p className="au-sub">Pick a username. It's how you'll sign in.</p>
+              {/* This used to ask "What should we call you?" over a username
+                  field. People answered with their first name, which burns the
+                  good usernames fast and is not what the field is for (Miska).
+                  Ask for the one thing this screen actually takes. */}
+              <h2 className="au-q">Pick a username.</h2>
+              <p className="au-sub">It's how you'll sign in.</p>
               <div className="field">
                 <input type="text" autoFocus autoComplete="username" autoCapitalize="none" autoCorrect="off"
                   spellCheck="false" inputMode="text" value={username} placeholder="e.g. sarah"
@@ -134,9 +138,10 @@ export default function Login({ onAuthed, initialMode = 'signin', onBack }) {
 
           {mode === 'signup' && step === 1 && (
             <form onSubmit={nextFromEmail}>
-              <p className="au-greet">Nice to meet you, {name}.</p>
-              <h2 className="au-q">Where can we reach you?</h2>
-              <p className="au-sub">Your email is only for password recovery. No newsletters, no noise.</p>
+              {/* No greeting: we never asked their name, so addressing them by
+                  their username is the same confusion one screen later. */}
+              <h2 className="au-q">What's your email?</h2>
+              <p className="au-sub">Your email is only for password recovery.</p>
               <div className="field">
                 <input type="email" autoFocus autoComplete="email" autoCapitalize="none" autoCorrect="off"
                   spellCheck="false" inputMode="email" value={email} placeholder="you@example.com"
@@ -149,8 +154,7 @@ export default function Login({ onAuthed, initialMode = 'signin', onBack }) {
 
           {mode === 'signup' && step === 2 && (
             <form onSubmit={submitSignup}>
-              <p className="au-greet">Last thing, {name}.</p>
-              <h2 className="au-q">Set a password.</h2>
+              <h2 className="au-q">Last thing: set a password.</h2>
               <p className="au-sub">At least 6 characters. Then we build your challenge.</p>
               {/* hidden username keeps password managers associating the pair */}
               <input className="au-ghost" type="text" name="username" value={uname} readOnly

@@ -10,6 +10,7 @@ import { ModeCards } from './PostCreateSteps.jsx'
 export default function YouSheet({
   theme, onPickTheme, tone, onPickTone,
   sharing, onPickSharing, photoReqs = [], onToggleReq, showPrivacy = true,
+  displayName, onSaveName,
   email, onSaveEmail, onDeleteAccount, onEditChecklist, onNewChallenge, onExport, onClose,
 }) {
   return (
@@ -60,9 +61,37 @@ export default function YouSheet({
           photoReqs={photoReqs} onToggleReq={onToggleReq} />
       )}
 
+      {onSaveName && <DisplayName name={displayName} onSave={onSaveName} />}
       {onSaveEmail && <RecoveryEmail email={email} onSave={onSaveEmail} />}
       {onDeleteAccount && <DeleteAccount onDelete={onDeleteAccount} />}
     </Sheet>
+  )
+}
+
+// Signup asks for a username, not a name, so this is where the name other
+// people see gets set. It starts as your username, capitalized.
+function DisplayName({ name, onSave }) {
+  const [val, setVal] = useState(name || '')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const dirty = val.trim() && val.trim() !== (name || '')
+  async function save() {
+    setBusy(true); setMsg(null)
+    try { await onSave(val.trim()); setMsg({ err: false, t: 'Saved' }) }
+    catch (e) { setMsg({ err: true, t: e.message }) }
+    finally { setBusy(false) }
+  }
+  return (
+    <>
+      <div className="set-label"><Icon name="edit" size={13} />Your name</div>
+      <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>What everyone else sees. Your username doesn't change.</p>
+      <div className="row-split" style={{ gap: 8 }}>
+        <input className="fr-input" style={{ flex: 1 }} type="text" maxLength={40}
+          value={val} placeholder="Your name" onChange={(e) => { setVal(e.target.value); setMsg(null) }} />
+        <button className="btn btn-go btn-sm" disabled={busy || !dirty} onClick={save}>{busy ? '…' : 'Save'}</button>
+      </div>
+      {msg && <div className={msg.err ? 'login-err' : 'muted'} style={{ textAlign: 'left', fontSize: 12, marginTop: 6 }}>{msg.t}</div>}
+    </>
   )
 }
 

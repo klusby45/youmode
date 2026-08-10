@@ -130,6 +130,15 @@ export async function signUp({ username, password, email, phone = null }) {
 }
 
 // Recovery email (stored on profile; used only for password reset + contact).
+// The name other people see. Signup no longer asks for one (it asked over a
+// username field, which conflated the two), so this is where it gets set.
+export async function saveDisplayName(userId, displayName) {
+  const name = (displayName || '').trim().slice(0, 40)
+  if (!name) throw new Error('Enter a name')
+  const { error } = await supabase.from('profiles').update({ display_name: name }).eq('id', userId)
+  if (error) throw error
+}
+
 export async function saveEmail(userId, email) {
   const { error } = await supabase.from('profiles').update({ email: email?.trim().toLowerCase() || null }).eq('id', userId)
   if (error) throw error
