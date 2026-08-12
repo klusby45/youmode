@@ -102,8 +102,13 @@ export default function Today() {
     setUploading(req.id)
     setSaveErr(null)
     try {
-      await actions.uploadProof(challenge.id, me.id, cfg.todayStr, req, file, log?.entriesByReq?.[req.id])
+      const saved = await actions.uploadProof(challenge.id, me.id, cfg.todayStr, req, file, log?.entriesByReq?.[req.id])
       await actions.refresh()
+      // A sleep screenshot is read straight away: the times are the point of
+      // the photo, and waiting to see them would make it feel like a checkbox.
+      if (req.sleepBy != null && req.wakeBy != null && saved?.id) {
+        actions.verifySleep(saved.id).then(() => actions.refresh()).catch(() => {})
+      }
     } catch {
       setSaveErr(`"${req.label}" photo didn't save. Check your connection and try again.`)
     } finally {
@@ -282,7 +287,13 @@ export default function Today() {
   const mealSlotDone = (r) => mealPool.met && isMealReq(r) && !r.optional && !isFilled(r)
   const photos = reqs.filter((r) => r.kind === 'photo' && daily(r)
     && (!api.isExtraMeal(r) || isFilled(r)) && !mealSlotDone(r))
-  const checks = reqs.filter((r) => r.kind === 'check' && daily(r))
+  const allChecks = reqs.filter((r) => r.kind === 'check' && daily(r))
+  // Items sharing a group name become one tile. "Fuel" is the meal tag the
+  // coach writes, not a group someone chose, so it never collapses.
+  const groupOf = (r) => (r.group && r.group !== 'Fuel' ? r.group : null)
+  const groupNames = [...new Set(allChecks.map(groupOf).filter(Boolean))]
+    .filter((g) => allChecks.filter((r) => groupOf(r) === g).length > 1)
+  const checks = allChecks.filter((r) => !groupNames.includes(groupOf(r)))
   const notes = reqs.filter((r) => r.kind === 'note' && daily(r))
   const timers = reqs.filter((r) => r.kind === 'timer' && daily(r))
   // Weekly-cadence items live in their own "This week" section — they never
@@ -414,6 +425,31 @@ export default function Today() {
       </div>
 
       {checks.length > 0 && <div style={{ height: 14 }} />}
+      {groupNames.map((g) => {
+        const items = allChecks.filter((r) => groupOf(r) === g)
+        const done = items.filter((r) => entrySatisfies(r, log?.entriesByReq?.[r.id])).length
+        return (
+          <div key={g} className="grp">
+            <div className="grp-head">
+              <span className="grp-name">{g}</span>
+              <span className={'grp-count' + (done === items.length ? ' met' : '')}>{done} of {items.length}</span>
+            </div>
+            <div className="grp-items">
+              {items.map((r) => {
+                const on = entrySatisfies(r, log?.entriesByReq?.[r.id])
+                return (
+                  <button key={r.id} className={'grp-chip' + (on ? ' on' : '')} disabled={!editable || saving === r.id}
+                    onClick={() => toggleCheck(r)}>
+                    <span className="gc-box">{on && <Icon name="check" size={11} strokeWidth={3} />}</span>
+                    {r.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+
       {notes.map((r) => {
         const entry = log?.entriesByReq?.[r.id]
         const on = entrySatisfies(r, entry)

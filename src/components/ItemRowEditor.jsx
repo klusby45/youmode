@@ -82,6 +82,37 @@ export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMove
           ariaLabel={it.kind === 'note' ? 'The question to answer' : 'Detail'}
           onChange={(e) => onChange({ hint: e.target.value })} />
       </div>
+      {/* Four supplements as four tiles is a lot of screen for four taps.
+          Items sharing a group name collapse into one (Miska). */}
+      <div className="br-group">
+        <label>Group</label>
+        <input className="br-group-in" type="text" maxLength={24} value={it.group || ''}
+          placeholder="none, e.g. Supplements"
+          onChange={(e) => onChange({ group: e.target.value.trim() || null })} />
+      </div>
+
+      {/* A sleep screenshot answers both ends of the night at once, and unlike
+          a checkbox it is evidence. Both times set makes this a sleep item. */}
+      {it.kind === 'photo' && (
+        it.sleepBy == null || it.wakeBy == null ? (
+          <button type="button" className="br-due-add" style={{ marginTop: 8 }}
+            onClick={() => onChange({ sleepBy: 60, wakeBy: 540, captureOnly: false })}>
+            + Check this against a sleep screenshot
+          </button>
+        ) : (
+          <div className="br-due br-sleep">
+            <label>Asleep by</label>
+            <input type="time" className="br-due-in" value={toClock(it.sleepBy)}
+              onChange={(e) => onChange({ sleepBy: fromClock(e.target.value) })} />
+            <label>Up by</label>
+            <input type="time" className="br-due-in" value={toClock(it.wakeBy)}
+              onChange={(e) => onChange({ wakeBy: fromClock(e.target.value) })} />
+            <button type="button" className="br-due-x" aria-label="Remove the sleep check"
+              onClick={() => onChange({ sleepBy: null, wakeBy: null })}><Icon name="x" size={12} /></button>
+          </div>
+        )
+      )}
+
       {it.frequency !== 'weekly' && it.frequency !== 'monthly' && (
         <div className="br-due">
           {it.dueBy == null ? (

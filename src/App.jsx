@@ -234,7 +234,7 @@ export default function App() {
   const actions = useMemo(() => ({
     refresh, signOut, switchChallenge,
     uploadProof: api.uploadProof, clearPhotos: api.clearPhotos, setChecked: api.setChecked, setCheckCount: api.setCheckCount,
-    saveNote: api.saveNote,
+    saveNote: api.saveNote, verifySleep: api.verifySleep,
     saveCaption: api.saveCaption, estimateMeal: api.estimateMeal, logMealCaption: api.logMealCaption, addWeighIn: api.addWeighIn,
     dismissAiFlag: api.dismissAiFlag, reviewDay: api.reviewDay, useRedemption: api.useRedemption,
     goTo: setView, // lets a screen point at another tab (e.g. Today -> History)
@@ -1038,6 +1038,22 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .ny-peek{margin-top:26px;text-align:left;opacity:.72}
 .ny-peek .section-label{justify-content:flex-start}
 .slot.preview,.watertoggle.preview{pointer-events:none}
+.br-group{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--muted)}
+.br-group-in{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:5px 9px;color:var(--text);font:inherit;font-size:12px}
+.br-sleep label{white-space:nowrap}
+/* A group of small checks in one tile. */
+.grp{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
+.grp-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.grp-name{font-weight:650;font-size:15px;flex:1}
+.grp-count{font-size:12px;color:var(--muted)}
+.grp-count.met{color:var(--green)}
+.grp-items{display:flex;flex-wrap:wrap;gap:6px}
+.grp-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;
+  border:1px solid var(--line);background:var(--panel-2);color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
+.grp-chip.on{border-color:var(--blue);color:var(--text);background:color-mix(in srgb,var(--blue) 12%,transparent)}
+.grp-chip .gc-box{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--line-2);display:grid;place-items:center;flex:none}
+.grp-chip.on .gc-box{background:var(--blue);border-color:var(--blue);color:#fff}
 /* Note items: the question, your last answer, and room to write. */
 .noterow{text-align:left}
 .note-prev{background:var(--panel-2);border-left:2px solid var(--line-2);border-radius:0 10px 10px 0;

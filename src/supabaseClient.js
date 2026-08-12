@@ -53,6 +53,7 @@ const nReq = (r) => r && ({
   timesPerMonth: r.times_per_month ?? null, // monthly cadence target
   captureOnly: !!r.capture_only, // photo items: camera-only (no uploads) when true
   dueBy: r.due_by ?? null, // minutes after midnight this is due; null = anytime
+  sleepBy: r.sleep_by ?? null, wakeBy: r.wake_by ?? null, // both set = a sleep screenshot item
 })
 const nEntry = (r) => r && ({
   id: r.id, dayLogId: r.day_log_id, requirementId: r.requirement_id,
@@ -337,13 +338,15 @@ async function insertRequirementRows(challengeId, userId, items) {
     times_per_day: it.kind === 'check' && Number(it.timesPerDay) > 1 ? Math.min(6, Math.round(Number(it.timesPerDay))) : null,
     capture_only: it.kind === 'photo' ? !!it.captureOnly : false,
     due_by: it.dueBy ?? null,
+    sleep_by: it.sleepBy ?? null,
+    wake_by: it.wakeBy ?? null,
   }))
   // Pre-migration repair ladder: strip newer columns, degrade timer→check
   // (the old kind constraint), or BOTH — whichever the error calls for. A
   // timer item created before the SQL lands needs strip AND degrade together.
-  const stripNew = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, times_per_day: _d, times_per_month: _tm, capture_only: _c, due_by: _db, ...r }) => r
+  const stripNew = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, times_per_day: _d, times_per_month: _tm, capture_only: _c, due_by: _db, sleep_by: _sb, wake_by: _wb, ...r }) => r
   const degradeKind = (r) => (r.kind === 'timer' ? { ...r, kind: 'check' } : r)
-  const MIGRATABLE = /kind|multi|min_minutes|frequency|times_per_week|times_per_day|times_per_month|capture_only|due_by/
+  const MIGRATABLE = /kind|multi|min_minutes|frequency|times_per_week|times_per_day|times_per_month|capture_only|due_by|sleep_by|wake_by/
   let { error } = await supabase.from('requirements').insert(rows)
   if (error) {
     for (const candidate of [rows.map(stripNew), rows.map(degradeKind), rows.map(degradeKind).map(stripNew)]) {
@@ -406,12 +409,14 @@ export async function syncMyRequirements(challengeId, userId, items) {
     times_per_day: it.kind === 'check' && Number(it.timesPerDay) > 1 ? Math.min(6, Math.round(Number(it.timesPerDay))) : null,
     capture_only: it.kind === 'photo' ? !!it.captureOnly : false,
     due_by: it.dueBy ?? null,
+    sleep_by: it.sleepBy ?? null,
+    wake_by: it.wakeBy ?? null,
   })
   // Same pre-migration repair ladder as insertRequirementRows: strip newer
   // columns, degrade timer→check, or both.
-  const strip = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, times_per_day: _d, times_per_month: _tm, capture_only: _c, due_by: _db, ...r }) => r
+  const strip = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, times_per_day: _d, times_per_month: _tm, capture_only: _c, due_by: _db, sleep_by: _sb, wake_by: _wb, ...r }) => r
   const degradeKind = (r) => (r.kind === 'timer' ? { ...r, kind: 'check' } : r)
-  const MIGRATABLE = /kind|multi|min_minutes|frequency|times_per_week|times_per_day|times_per_month|capture_only|due_by/
+  const MIGRATABLE = /kind|multi|min_minutes|frequency|times_per_week|times_per_day|times_per_month|capture_only|due_by|sleep_by|wake_by/
   const writeWithRepairs = async (row, write) => {
     let { error } = await write(row)
     if (error) {
@@ -712,6 +717,22 @@ export async function addWeighIn(userId, date, weight) {
 // Awaitable estimate — used to self-heal entries stranded on "estimating…"
 // after a prior fire-and-forget request silently failed (cold function,
 // dropped mobile connection, etc.).
+// Read a sleep screenshot and score it against the item's targets. Same
+// fire-and-forget shape as the meal estimate: the photo is already saved, this
+// only adds the reading.
+export async function verifySleep(entryId) {
+  const { data } = await supabase.auth.getSession()
+  const token = data?.session?.access_token
+  if (!token) throw new Error('not signed in')
+  const res = await fetch(`${API_BASE}/api/verify-sleep`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ entryId }),
+  })
+  if (!res.ok) throw new Error('sleep check failed')
+  return res.json()
+}
+
 export async function estimateMeal(entryId) {
   const { data } = await supabase.auth.getSession()
   const token = data?.session?.access_token
