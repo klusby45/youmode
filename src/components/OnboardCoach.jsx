@@ -683,8 +683,15 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
               </div>
             )}
             <button className="btn btn-accent btn-block" style={{ marginTop: 8 }} disabled={busy} onClick={doCreate}>{busy ? 'Creating…' : err ? 'Try again' : 'Create my challenge'}</button>
-            <p className="center muted" style={{ fontSize: 12, marginTop: 10 }}>You can edit your challenge anytime.</p>
-            <button className="auth-flip" onClick={() => { setErr(null); setStep('interview') }}>Keep tweaking with the guide</button>
+            <p className="center muted" style={{ fontSize: 12, marginTop: 10 }}>
+              Nothing here is final. You can change all of it later from your settings.
+            </p>
+            {/* Same action as the link at the top of this screen: go back to
+                the chat. It said "Keep tweaking with the guide", which named
+                neither the destination nor the guide, so it read as a button
+                you were scared to press (Miska). Two doors to one room are
+                fine; two names for it are not. */}
+            <button className="auth-flip" onClick={() => { setErr(null); setStep('interview') }}>Back to the chat</button>
           </>
         )}
 
