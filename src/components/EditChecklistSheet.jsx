@@ -118,7 +118,8 @@ export default function EditChecklistSheet({ reqs, onSave, onClose }) {
           onChange={(patch) => updateItem(i, patch)}
           onRemove={() => removeItem(i)}
           onMoveUp={i > 0 ? () => moveItem(i, -1) : null}
-          onMoveDown={i < items.length - 1 ? () => moveItem(i, 1) : null} />
+          onMoveDown={i < items.length - 1 ? () => moveItem(i, 1) : null}
+                groups={[...new Set(items.map((x) => x.group).filter((g) => g && g !== 'Fuel'))]} />
       ))}
       <div className="add-row">
         <button className="btn btn-sm" onClick={() => addItem('photo')}><Icon name="camera" size={14} />Photo</button>

@@ -234,7 +234,7 @@ export default function App() {
   const actions = useMemo(() => ({
     refresh, signOut, switchChallenge,
     uploadProof: api.uploadProof, clearPhotos: api.clearPhotos, setChecked: api.setChecked, setCheckCount: api.setCheckCount,
-    saveNote: api.saveNote, verifySleep: api.verifySleep,
+    saveNote: api.saveNote,
     saveCaption: api.saveCaption, estimateMeal: api.estimateMeal, logMealCaption: api.logMealCaption, addWeighIn: api.addWeighIn,
     dismissAiFlag: api.dismissAiFlag, reviewDay: api.reviewDay, useRedemption: api.useRedemption,
     goTo: setView, // lets a screen point at another tab (e.g. Today -> History)
@@ -1043,6 +1043,7 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   padding:5px 9px;color:var(--text);font:inherit;font-size:12px}
 .br-sleep label{white-space:nowrap}
 /* A group of small checks in one tile. */
+.wt-count-box{font-family:var(--num-font,var(--cond));font-size:11px;font-weight:700;color:var(--muted)}
 .grp{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
 .grp-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .grp-name{font-weight:650;font-size:15px;flex:1}

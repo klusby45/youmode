@@ -8,5 +8,4 @@
 /api/request-reset  /.netlify/functions/request-reset  200
 /api/reset-password  /.netlify/functions/reset-password  200
 /privacy  /privacy.html  200
-/api/verify-sleep  /.netlify/functions/verify-sleep  200
 /*    /index.html   200

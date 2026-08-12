@@ -34,7 +34,7 @@ const clockLabel = (m) => {
   return mm ? `${h12}:${String(mm).padStart(2, '0')}${ampm}` : `${h12}${ampm}`
 }
 
-export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMoveDown }) {
+export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMoveDown, groups = [] }) {
   const wk = it.frequency === 'weekly'
   const mo = it.frequency === 'monthly'
   const perDay = Math.max(1, Number(it.timesPerDay) || 1)
@@ -84,34 +84,22 @@ export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMove
       </div>
       {/* Four supplements as four tiles is a lot of screen for four taps.
           Items sharing a group name collapse into one (Miska). */}
+      {/* Picking beats spelling. Typing the group name on every item meant
+          one typo made a second group of one (Miska). */}
       <div className="br-group">
         <label>Group</label>
-        <input className="br-group-in" type="text" maxLength={24} value={it.group || ''}
-          placeholder="none, e.g. Supplements"
-          onChange={(e) => onChange({ group: e.target.value.trim() || null })} />
+        <select className="br-group-in" value={it.group || ''}
+          onChange={(e) => {
+            if (e.target.value !== '__new') { onChange({ group: e.target.value || null }); return }
+            const name = window.prompt('Name this group', 'Supplements')
+            if (name && name.trim()) onChange({ group: name.trim().slice(0, 24) })
+          }}>
+          <option value="">No group</option>
+          {groups.filter((g) => g !== it.group).map((g) => <option key={g} value={g}>{g}</option>)}
+          {it.group && <option value={it.group}>{it.group}</option>}
+          <option value="__new">+ New group…</option>
+        </select>
       </div>
-
-      {/* A sleep screenshot answers both ends of the night at once, and unlike
-          a checkbox it is evidence. Both times set makes this a sleep item. */}
-      {it.kind === 'photo' && (
-        it.sleepBy == null || it.wakeBy == null ? (
-          <button type="button" className="br-due-add" style={{ marginTop: 8 }}
-            onClick={() => onChange({ sleepBy: 60, wakeBy: 540, captureOnly: false })}>
-            + Check this against a sleep screenshot
-          </button>
-        ) : (
-          <div className="br-due br-sleep">
-            <label>Asleep by</label>
-            <input type="time" className="br-due-in" value={toClock(it.sleepBy)}
-              onChange={(e) => onChange({ sleepBy: fromClock(e.target.value) })} />
-            <label>Up by</label>
-            <input type="time" className="br-due-in" value={toClock(it.wakeBy)}
-              onChange={(e) => onChange({ wakeBy: fromClock(e.target.value) })} />
-            <button type="button" className="br-due-x" aria-label="Remove the sleep check"
-              onClick={() => onChange({ sleepBy: null, wakeBy: null })}><Icon name="x" size={12} /></button>
-          </div>
-        )
-      )}
 
       {it.frequency !== 'weekly' && it.frequency !== 'monthly' && (
         <div className="br-due">

@@ -717,22 +717,6 @@ export async function addWeighIn(userId, date, weight) {
 // Awaitable estimate — used to self-heal entries stranded on "estimating…"
 // after a prior fire-and-forget request silently failed (cold function,
 // dropped mobile connection, etc.).
-// Read a sleep screenshot and score it against the item's targets. Same
-// fire-and-forget shape as the meal estimate: the photo is already saved, this
-// only adds the reading.
-export async function verifySleep(entryId) {
-  const { data } = await supabase.auth.getSession()
-  const token = data?.session?.access_token
-  if (!token) throw new Error('not signed in')
-  const res = await fetch(`${API_BASE}/api/verify-sleep`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ entryId }),
-  })
-  if (!res.ok) throw new Error('sleep check failed')
-  return res.json()
-}
-
 export async function estimateMeal(entryId) {
   const { data } = await supabase.auth.getSession()
   const token = data?.session?.access_token

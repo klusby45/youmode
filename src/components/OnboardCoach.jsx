@@ -632,7 +632,8 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
                 onChange={(patch) => updateItem(i, patch)}
                 onRemove={() => removeItem(i)}
                 onMoveUp={i > 0 ? () => moveItem(i, -1) : null}
-                onMoveDown={i < items.length - 1 ? () => moveItem(i, 1) : null} />
+                onMoveDown={i < items.length - 1 ? () => moveItem(i, 1) : null}
+                groups={[...new Set(items.map((x) => x.group).filter((g) => g && g !== 'Fuel'))]} />
             ))}
             <div className="row-split" style={{ marginTop: 4 }}>
               <button className="btn btn-sm" onClick={() => addItem('photo')}><Icon name="camera" size={14} />Add photo item</button>

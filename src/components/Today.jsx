@@ -102,13 +102,8 @@ export default function Today() {
     setUploading(req.id)
     setSaveErr(null)
     try {
-      const saved = await actions.uploadProof(challenge.id, me.id, cfg.todayStr, req, file, log?.entriesByReq?.[req.id])
+      await actions.uploadProof(challenge.id, me.id, cfg.todayStr, req, file, log?.entriesByReq?.[req.id])
       await actions.refresh()
-      // A sleep screenshot is read straight away: the times are the point of
-      // the photo, and waiting to see them would make it feel like a checkbox.
-      if (req.sleepBy != null && req.wakeBy != null && saved?.id) {
-        actions.verifySleep(saved.id).then(() => actions.refresh()).catch(() => {})
-      }
     } catch {
       setSaveErr(`"${req.label}" photo didn't save. Check your connection and try again.`)
     } finally {
@@ -221,20 +216,28 @@ export default function Today() {
           ))}
           {peekCadence.length > 0 && (
             <>
-              {/* These sit in their own section once the challenge is running,
-                  and they show every day until the week's count is met. Leaving
-                  them out of the preview made them look optional. */}
-              <div className="section-label" style={{ marginTop: 16 }}>Through the week</div>
-              {peekCadence.map((r) => (
+              {/* Mirrors the live section: photo items look like photo items,
+                  the count sits on each one, and the "shows every day" rule is
+                  said once at the top instead of on every row (Miska). */}
+              <div className="section-label" style={{ marginTop: 18 }}>Weekly goals</div>
+              <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
+                These show every day until you have completed them.
+              </p>
+              <div className="slots-grid">
+                {peekCadence.filter((r) => r.kind === 'photo').map((r) => (
+                  <div key={r.id} className="slot preview">
+                    <span className="slot-ic"><Icon name={r.icon || 'camera'} size={22} /></span>
+                    <span className="slot-label">{r.label}</span>
+                    <span className="slot-hint">0 of {r.timesPerWeek || r.timesPerMonth || 1} this {r.frequency === 'monthly' ? 'month' : 'week'}</span>
+                  </div>
+                ))}
+              </div>
+              {peekCadence.filter((r) => r.kind !== 'photo').map((r) => (
                 <div key={r.id} className="watertoggle preview" style={{ marginBottom: 8 }}>
-                  <span className="wt-box" />
+                  <span className="wt-box wt-count-box">0/{r.timesPerWeek || r.timesPerMonth || 1}</span>
                   <span style={{ flex: 1 }}>
                     <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
-                    <span className="wt-hint">
-                      {r.frequency === 'weekly'
-                        ? `${r.timesPerWeek || 1}× a week, shows every day until you have done it`
-                        : `${r.timesPerMonth || 1}× a month`}
-                    </span>
+                    <span className="wt-hint">{r.hint || `${r.timesPerWeek || r.timesPerMonth || 1}× a ${r.frequency === 'monthly' ? 'month' : 'week'}`}</span>
                   </span>
                   <Icon name={r.icon || 'bolt'} size={22} style={{ color: 'var(--muted-2)' }} />
                 </div>
@@ -510,7 +513,10 @@ export default function Today() {
 
       {weekly.length > 0 && (
         <>
-          <div className="section-label" style={{ marginTop: 18 }}>This week</div>
+          <div className="section-label" style={{ marginTop: 18 }}>Weekly goals</div>
+          <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
+            These show every day until you have completed them.
+          </p>
           {weekly.map((r) => {
             const wp = wprog[r.id] || { done: 0, target: r.timesPerWeek || 1, met: false }
             const onToday = entrySatisfies(r, log?.entriesByReq?.[r.id])

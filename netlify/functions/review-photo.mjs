@@ -68,6 +68,24 @@ async function handle(req) {
     // 4. Ask Claude for a plausibility check — plus duration certification
     //    when the requirement carries a minimum (e.g. workouts totaling 45 min).
     const minMin = reqmt?.min_minutes || null
+    // A time the item names, either in its own words ("lights out by 1am") or
+    // as a deadline set in the builder. No separate setting and no toggle: if
+    // the item says a time, the photo gets read against it. Miska's point was
+    // that this should just be what a photo check does.
+    const clock = (m) => {
+      const h = Math.floor(m / 60), mm = m % 60
+      const ap = h < 12 ? 'am' : 'pm'
+      return `${h % 12 === 0 ? 12 : h % 12}${mm ? ':' + String(mm).padStart(2, '0') : ''}${ap}`
+    }
+    const dueTxt = reqmt?.due_by != null ? ` It is due by ${clock(reqmt.due_by)}.` : ''
+    // Does this item actually have something numeric to verify?
+    const namesTime = /\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(`${reqmt?.label || ''} ${reqmt?.hint || ''}`)
+    const strict = !!minMin || reqmt?.due_by != null || namesTime
+    const timeRule =
+      ' TIMES: if the requirement names a time of day, or a deadline is given, and the photo is a screenshot that shows times (a sleep summary from Oura or Whoop or Apple Health, a watch face, a workout start time, a timestamped app screen), READ the relevant time and compare it. Say what you read either way: "in bed 12:42am, on target" or "in bed 1:47am, later than 1am".' +
+      ' "BY <time>" IS A DEADLINE, NOT A TARGET TO HIT. Earlier is always fine and is never a miss: "up by 9am" is satisfied by 7:58am, 6:00am or 8:59am, and only missed at 9:01am or later. The same for a bedtime. Only flag a time that is genuinely LATER than what was asked.' +
+      ' A time before midnight always beats a small-hours target, so 11:20pm is EARLIER than 1am, not later.' +
+      ' If the times are not clearly legible, set ok=true and say you could not read them: a wrong miss is worse than no check.'
     const durationRule = minMin
       ? ` This requirement also has a MINIMUM TOTAL DURATION of ${minMin} minutes. The photo(s) should be fitness-tracker/Apple Watch style screenshots showing workout durations or start–end times. Read every visible duration (e.g. "0:55:37", "45:12", or start–end times like "4:22PM–5:18PM") across ALL photos and ADD THEM UP. If the combined total is clearly under ${minMin} minutes, or no duration is readable in any photo, set ok=false and say what you could read (e.g. "I can only verify 32 of ${minMin} min across 2 screenshots").`
       : ''
@@ -75,20 +93,25 @@ async function handle(req) {
       method: 'POST',
       headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        // Haiku is fine for "is this a photo of a workout". It is not reliable
+        // at "is 1:47am later than 1am", which it got right one run and wrong
+        // the next. Anything with a number to check against gets the better
+        // model: this is the accountability claim, and a coin-flip verdict is
+        // worse than no verdict.
+        model: strict ? 'claude-sonnet-5' : 'claude-haiku-4-5-20251001',
         max_tokens: 300,
         system:
           'You are a friendly accountability spot-checker for a 75-Hard-style challenge app. ' +
           'Given a daily requirement and the photo(s) a participant uploaded as proof (multiple photos are one combined session), judge whether they PLAUSIBLY satisfy the requirement. ' +
           'Be lenient on subject matching — only flag photos that clearly do not match (wrong subject entirely, unrelated screenshot, blank/black image, obvious stock imagery). ' +
           'Duration minimums, when given, are strict: verify them from what is actually readable.' +
-          durationRule +
+          durationRule + timeRule +
           ' Respond with ONLY strict JSON: {"ok": true|false, "note": "<one short, friendly sentence, max 140 chars — if a duration was checked, include the total you read>"}',
         messages: [{
           role: 'user',
           content: [
             ...photoUrls.map((u) => ({ type: 'image', source: { type: 'url', url: u } })),
-            { type: 'text', text: `Requirement: "${reqmt?.label || 'daily proof'}"${reqmt?.hint ? ` (${reqmt.hint})` : ''}${minMin ? ` — minimum ${minMin} minutes total` : ''}. ${photoUrls.length > 1 ? `These ${photoUrls.length} photos are one combined session.` : ''} Does this proof plausibly satisfy it?` },
+            { type: 'text', text: `Requirement: "${reqmt?.label || 'daily proof'}"${reqmt?.hint ? ` (${reqmt.hint})` : ''}${minMin ? ` — minimum ${minMin} minutes total` : ''}.${dueTxt} ${photoUrls.length > 1 ? `These ${photoUrls.length} photos are one combined session.` : ''} Does this proof plausibly satisfy it?` },
           ],
         }],
       }),
