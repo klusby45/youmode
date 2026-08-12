@@ -392,15 +392,15 @@ export default function App() {
               <span className="brand-name">{active.challenge.name}</span>
             </div>
           )}
-          <div className="daypill">
-            {dayNum < 1 ? (
-              // The countdown moved into the Today screen, where the waiting is
-              // the subject. Up here it crowded the name and the avatar.
-              <>SOON</>
-            ) : dayNum > myDays ? <>COMPLETE</> : (
-              <><span className="daypill-k">DAY</span><span className="daypill-n">{dayNum}</span><span className="daypill-t">/ {myDays}</span></>
-            )}
-          </div>
+          {/* Nothing at all before day one: the Today screen already says
+              "starts in 3 days" in the place you actually look (Miska). */}
+          {dayNum >= 1 && (
+            <div className="daypill">
+              {dayNum > myDays ? <>COMPLETE</> : (
+                <><span className="daypill-k">DAY</span><span className="daypill-n">{dayNum}</span><span className="daypill-t">/ {myDays}</span></>
+              )}
+            </div>
+          )}
           <div className="top-right">
             {bundle.challenges.length > 1 && (
               <select className="chal-switch" value={active.challenge.id} onChange={(e) => switchChallenge(e.target.value)}>

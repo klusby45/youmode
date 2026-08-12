@@ -141,9 +141,11 @@ function DayClock({ timezone, challengeTimezone, dayEndHour, onSave }) {
         ))}
       </div>
       <p className="muted" style={{ fontSize: 12, margin: '8px 2px 0', lineHeight: 1.5 }}>
+        {/* Say what THEIR setting does. The old line described midnight as if
+            it were the feature, which read as the opposite of the point. */}
         {(dayEndHour || 0) === 0
-          ? 'Anything after midnight counts toward the next day.'
-          : `Up until ${dayEndHour}am still counts as the day before, so a late night lands where it belongs.`}
+          ? 'Your day ends at midnight. Anything logged after that counts toward the next day.'
+          : `Your day runs until ${dayEndHour}am. A 1am bedtime or a ${dayEndHour === 1 ? '12:45am' : '2am'} check still counts toward the day before, and the new day starts after ${dayEndHour}am.`}
       </p>
       {msg && <div className={msg.err ? 'login-err' : 'muted'} style={{ textAlign: 'left', fontSize: 12, marginTop: 6 }}>{msg.t}</div>}
     </>

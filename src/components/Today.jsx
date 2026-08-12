@@ -183,6 +183,7 @@ export default function Today() {
     const peekPhotos = reqs.filter((r) => r.kind === 'photo' && isDay(r) && !api.isExtraMeal(r))
     const peekChecks = reqs.filter((r) => r.kind === 'check' && isDay(r))
     const peekNotes = reqs.filter((r) => r.kind === 'note' && isDay(r))
+    const peekCadence = reqs.filter((r) => (r.frequency === 'weekly' || r.frequency === 'monthly') && !api.isExtraMeal(r))
     return (
       <div className="notyet">
         <div className="e-ic"><Icon name="clock" size={40} /></div>
@@ -213,6 +214,28 @@ export default function Today() {
               <Icon name={r.icon || 'bolt'} size={22} style={{ color: 'var(--muted-2)' }} />
             </div>
           ))}
+          {peekCadence.length > 0 && (
+            <>
+              {/* These sit in their own section once the challenge is running,
+                  and they show every day until the week's count is met. Leaving
+                  them out of the preview made them look optional. */}
+              <div className="section-label" style={{ marginTop: 16 }}>Through the week</div>
+              {peekCadence.map((r) => (
+                <div key={r.id} className="watertoggle preview" style={{ marginBottom: 8 }}>
+                  <span className="wt-box" />
+                  <span style={{ flex: 1 }}>
+                    <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
+                    <span className="wt-hint">
+                      {r.frequency === 'weekly'
+                        ? `${r.timesPerWeek || 1}× a week, shows every day until you have done it`
+                        : `${r.timesPerMonth || 1}× a month`}
+                    </span>
+                  </span>
+                  <Icon name={r.icon || 'bolt'} size={22} style={{ color: 'var(--muted-2)' }} />
+                </div>
+              ))}
+            </>
+          )}
           {peekNotes.map((r) => (
             <div key={r.id} className="watertoggle preview" style={{ marginBottom: 8 }}>
               <span className="wt-box"><Icon name="edit" size={16} /></span>
