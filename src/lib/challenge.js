@@ -59,9 +59,15 @@ export function checkCount(entry) {
   return entry.checkCount ?? (entry.checked ? 1 : 0)
 }
 
+// A note has to say something. Not a wall, just more than "done": the whole
+// point of the kind is that a tick you can give yourself in half a second is
+// not evidence of anything.
+export const MIN_NOTE = 15
+
 export function entrySatisfies(req, entry) {
   if (!entry) return false
   if (req.kind === 'photo') return !!(entry.photoPaths?.length || entry.photoPath)
+  if (req.kind === 'note') return (entry.caption || '').trim().length >= MIN_NOTE
   const target = req.timesPerDay || 1
   return target > 1 ? checkCount(entry) >= target : !!entry.checked
 }

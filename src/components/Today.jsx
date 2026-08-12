@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useApp } from '../appContext.js'
 import { isMealReq, mealStats } from '../config.js'
-import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, checkCount, weeklyProgress, monthlyProgress, mealProgress, dueLabel, loggedLate, minutesIntoDay, dueMinutes, SAVE_WINDOW_DAYS } from '../lib/challenge.js'
+import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, checkCount, weeklyProgress, monthlyProgress, mealProgress, dueLabel, loggedLate, minutesIntoDay, dueMinutes, MIN_NOTE, SAVE_WINDOW_DAYS } from '../lib/challenge.js'
 import { IS_MOBILE } from '../lib/device.js'
 import { tapHaptic } from '../lib/native.js'
 import * as api from '../data.js'
@@ -19,6 +19,7 @@ export default function Today() {
   const [saving, setSaving] = useState(null) // requirement id of an in-flight check
   const [saveErr, setSaveErr] = useState(null)
   const [captioning, setCaptioning] = useState(null) // { req, entry } meal being described
+  const [noting, setNoting] = useState(null) // { req } note item being written
   const [more, setMore] = useState(false) // macro bar: show the secondary numbers
 
   const reqs = reqsFor(me.id)
@@ -210,6 +211,7 @@ export default function Today() {
   const photos = reqs.filter((r) => r.kind === 'photo' && daily(r)
     && (!api.isExtraMeal(r) || isFilled(r)) && !mealSlotDone(r))
   const checks = reqs.filter((r) => r.kind === 'check' && daily(r))
+  const notes = reqs.filter((r) => r.kind === 'note' && daily(r))
   const timers = reqs.filter((r) => r.kind === 'timer' && daily(r))
   // Weekly-cadence items live in their own "This week" section — they never
   // gate the day, so they're pulled out of the daily grids above.
@@ -340,6 +342,29 @@ export default function Today() {
       </div>
 
       {checks.length > 0 && <div style={{ height: 14 }} />}
+      {notes.map((r) => {
+        const entry = log?.entriesByReq?.[r.id]
+        const on = entrySatisfies(r, entry)
+        return (
+          <button key={r.id} className={'watertoggle noterow' + (on ? ' on' : '')}
+            onClick={() => editable && setNoting({ req: r })} disabled={!editable}
+            style={{ marginBottom: 8 }}>
+            <span className="wt-box" style={on ? { background: 'var(--green)', borderColor: 'var(--green)', color: '#fff' } : undefined}>
+              {on ? <Icon name="check" size={18} /> : <Icon name="edit" size={16} />}
+            </span>
+            <span style={{ flex: 1 }}>
+              <span className="wt-title" style={{ display: 'block' }}>
+                {r.label}{' '}<DueBadge req={r} entry={entry} cfg={cfg} />
+              </span>
+              <span className="wt-hint">
+                {on ? entry.caption : (r.hint || 'Write a few words about it')}
+              </span>
+            </span>
+            <Icon name="chevron" size={18} style={{ color: 'var(--muted-2)' }} />
+          </button>
+        )
+      })}
+
       {checks.map((r) => {
         const entry = log?.entriesByReq?.[r.id]
         const on = entrySatisfies(r, entry)
@@ -462,6 +487,30 @@ export default function Today() {
           name={challenge.name} onClose={() => setCelebrate(false)} />
       )}
 
+      {noting && (
+        <NoteSheet req={noting.req} entry={log?.entriesByReq?.[noting.req.id]}
+          previous={(() => {
+            // Your own last answer, shown while you write the next one. This
+            // is the part that makes a note more than a tick: you are writing
+            // against your own record, not into a void.
+            for (const l of myLogs.filter((x) => x.logDate < cfg.todayStr).sort((a, b) => b.logDate.localeCompare(a.logDate))) {
+              const e = l.entriesByReq?.[noting.req.id]
+              if (e?.caption) return { date: l.logDate, text: e.caption }
+            }
+            return null
+          })()}
+          onClose={() => setNoting(null)}
+          onSave={async (text) => {
+            const req = noting.req
+            setNoting(null)
+            setSaveErr(null)
+            try {
+              await actions.saveNote(challenge.id, me.id, cfg.todayStr, req, text)
+              tapHaptic()
+              await actions.refresh()
+            } catch { setSaveErr(`"${req.label}" didn't save. Try again.`) }
+          }} />
+      )}
       {captioning && (
         <CaptionSheet req={captioning.req} entry={captioning.entry}
           onSave={async (text) => {
@@ -781,6 +830,42 @@ function MacroRow({ label, value, unit, target, max, ceiling }) {
 
 // One-line meal description, edited in a small sheet; the AI reads photo +
 // caption to estimate macros, which render on the tile itself.
+// A note item's sheet. The question the item asks, what you said last time,
+// and a box. No bank screenshots, no honour-system tick.
+export function NoteSheet({ req, entry, previous, onSave, onClose }) {
+  const [text, setText] = useState(entry?.caption || '')
+  const [busy, setBusy] = useState(false)
+  const left = MIN_NOTE - text.trim().length
+  const ok = left <= 0
+  return (
+    <Sheet onClose={onClose} position="top">
+      <div className="screen-title" style={{ fontSize: 20, marginBottom: 4 }}>{req.label}</div>
+      <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>
+        {req.hint || 'What happened, and what is next?'}
+      </p>
+      {previous && (
+        <div className="note-prev">
+          <span className="np-when">Last time · {previous.date}</span>
+          {previous.text}
+        </div>
+      )}
+      <textarea className="fr-input note-in" rows={5} autoFocus value={text}
+        placeholder="A few words is enough, as long as they are true."
+        onChange={(e) => setText(e.target.value)} />
+      <div className="review-actions" style={{ marginTop: 10 }}>
+        <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <button className="btn btn-go" disabled={!ok || busy}
+          onClick={() => { setBusy(true); onSave(text) }}>
+          {busy ? 'Saving…' : ok ? 'Save' : `${left} more`}
+        </button>
+      </div>
+      <p className="muted" style={{ fontSize: 12, margin: '10px 2px 0' }}>
+        Only you see this{req.isPrivate ? '' : ', and your referee if you have one'}.
+      </p>
+    </Sheet>
+  )
+}
+
 export function CaptionSheet({ req, entry, onSave, onClose }) {
   const [text, setText] = useState(entry?.caption || '')
   const [busy, setBusy] = useState(false)

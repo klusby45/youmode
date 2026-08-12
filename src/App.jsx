@@ -229,6 +229,7 @@ export default function App() {
   const actions = useMemo(() => ({
     refresh, signOut, switchChallenge,
     uploadProof: api.uploadProof, clearPhotos: api.clearPhotos, setChecked: api.setChecked, setCheckCount: api.setCheckCount,
+    saveNote: api.saveNote,
     saveCaption: api.saveCaption, estimateMeal: api.estimateMeal, logMealCaption: api.logMealCaption, addWeighIn: api.addWeighIn,
     dismissAiFlag: api.dismissAiFlag, reviewDay: api.reviewDay, useRedemption: api.useRedemption,
     goTo: setView, // lets a screen point at another tab (e.g. Today -> History)
@@ -1020,6 +1021,13 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   background:rgba(0,0,0,.55);padding:1px 0}
 .pr-scrub{display:flex;align-items:center;gap:8px}
 .pr-scrub input{flex:1;accent-color:var(--brand)}
+/* Note items: the question, your last answer, and room to write. */
+.noterow{text-align:left}
+.note-prev{background:var(--panel-2);border-left:2px solid var(--line-2);border-radius:0 10px 10px 0;
+  padding:10px 12px;margin-bottom:12px;font-size:13px;line-height:1.5;color:var(--muted)}
+.np-when{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted-2);margin-bottom:4px}
+.note-in{width:100%;resize:vertical;line-height:1.5}
 /* Deadlines and reordering on a checklist row. */
 .br-move{display:inline-flex;gap:2px;margin-left:auto;margin-right:4px}
 .br-move button{width:26px;height:26px;display:grid;place-items:center;border-radius:7px;

@@ -450,6 +450,7 @@ async function upsertEntry(dayLogId, req, userId, patch) {
   // what a deadline is measured against, and updated_at moves every time a
   // caption is edited or a macro estimate is written back.
   const isProof = patch.photo_path || patch.photo_paths?.length || patch.checked === true || patch.check_count > 0
+    || (typeof patch.caption === 'string' && patch.caption.trim().length > 0)
   const row = {
     day_log_id: dayLogId, requirement_id: req.id, challenge_id: req.challengeId,
     user_id: userId, updated_at: now, ...patch,
@@ -670,6 +671,14 @@ export async function transcribeAudio(audio, mimeType) {
     throw new Error(body.error || 'transcription failed')
   }
   return res.json() // { text }
+}
+
+// A note IS the proof for a note item, so it goes through the entry upsert
+// (which stamps logged_at) rather than the caption patch, which exists to
+// re-describe a meal photo.
+export async function saveNote(challengeId, userId, logDate, req, text) {
+  const dl = await ensureDayLog(challengeId, userId, logDate)
+  return upsertEntry(dl.id, req, userId, { caption: (text || '').trim() || null })
 }
 
 export async function saveCaption(entryId, caption) {

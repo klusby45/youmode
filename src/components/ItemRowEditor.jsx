@@ -46,6 +46,12 @@ export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMove
             onClick={() => onChange({ kind: 'photo', icon: 'camera', timesPerDay: null })}>📷 Photo</button>
           <button type="button" className={it.kind === 'check' ? 'on' : ''} title="Just check it off"
             onClick={() => onChange({ kind: 'check', icon: 'bolt', captureOnly: false })}>✓ Check</button>
+          {/* For the things a tick cannot honestly prove and a photo would mean
+              handing over something private. Miska's weekly money check-in:
+              she is not screenshotting her bank, and clicking a box is how you
+              stop taking it seriously. */}
+          <button type="button" className={it.kind === 'note' ? 'on' : ''} title="Write a short note"
+            onClick={() => onChange({ kind: 'note', icon: 'edit', captureOnly: false, timesPerDay: null })}>✎ Note</button>
           {/* Timer only for things you DO for minutes — hidden on meals, water,
               photos, weigh-ins. Kept visible if the item already IS a timer, so
               it never gets stuck with no way to switch off. */}
@@ -71,7 +77,10 @@ export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMove
       </div>
       <div className="br-fields">
         <GrowText className="br-label" value={it.label} placeholder="e.g. 45-min workout" ariaLabel="Item name" onChange={(e) => onChange({ label: e.target.value })} />
-        <GrowText className="br-hint" value={it.hint || ''} placeholder="detail (optional)" ariaLabel="Detail" onChange={(e) => onChange({ hint: e.target.value })} />
+        <GrowText className="br-hint" value={it.hint || ''}
+          placeholder={it.kind === 'note' ? 'what should you answer? e.g. what moved, and what is next' : 'detail (optional)'}
+          ariaLabel={it.kind === 'note' ? 'The question to answer' : 'Detail'}
+          onChange={(e) => onChange({ hint: e.target.value })} />
       </div>
       {it.frequency !== 'weekly' && it.frequency !== 'monthly' && (
         <div className="br-due">
