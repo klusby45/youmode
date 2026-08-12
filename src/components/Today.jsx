@@ -12,6 +12,12 @@ import Sheet from './Sheet.jsx'
 import DayComplete from './DayComplete.jsx'
 import Lightbox from './Lightbox.jsx'
 
+// Labels the builder writes on its own. They describe a kind of item, not a
+// group someone made, and treating them as groups boxed up things nobody
+// asked to be boxed up (Kyle: "you put my read 10 pages and one gallon of
+// water in a group, and I never asked for that").
+const SYSTEM_GROUPS = new Set(['Fuel', 'Check off', 'Train', 'Progress', 'Custom'])
+
 export default function Today() {
   const { cfg, me, logs, reqsFor, actions, challenge, daysFor, myPlan, myTargets, t, mode, summaries, myMember } = useApp()
   const myDays = daysFor(me.id)
@@ -202,7 +208,7 @@ export default function Today() {
     const peekChecks = reqs.filter((r) => r.kind === 'check' && isDay(r))
     // Same grouping the live screen uses. Without this, someone previewing
     // day one sees a flat list and reasonably concludes grouping did nothing.
-    const peekGroupOf = (r) => (r.group && r.group !== 'Fuel' ? r.group : null)
+      const peekGroupOf = (r) => (r.group && !SYSTEM_GROUPS.has(r.group) ? r.group : null)
     const peekGroups = [...new Set(peekChecks.map(peekGroupOf).filter(Boolean))]
       .filter((g) => peekChecks.filter((r) => peekGroupOf(r) === g).length > 1)
     const peekLoose = peekChecks.filter((r) => !peekGroups.includes(peekGroupOf(r)))
@@ -344,7 +350,7 @@ export default function Today() {
   const allChecks = reqs.filter((r) => r.kind === 'check' && daily(r))
   // Items sharing a group name become one tile. "Fuel" is the meal tag the
   // coach writes, not a group someone chose, so it never collapses.
-  const groupOf = (r) => (r.group && r.group !== 'Fuel' ? r.group : null)
+  const groupOf = (r) => (r.group && !SYSTEM_GROUPS.has(r.group) ? r.group : null)
   const groupNames = [...new Set(allChecks.map(groupOf).filter(Boolean))]
     .filter((g) => allChecks.filter((r) => groupOf(r) === g).length > 1)
   const checks = allChecks.filter((r) => !groupNames.includes(groupOf(r)))
@@ -384,7 +390,7 @@ export default function Today() {
         // Linen layout: the day IS the hero — big ring, serif day number, and
         // a voice line instead of the stat-dense header + togo banner.
         <>
-          <SoftHero dayNum={dayNum} done={doneCount} total={total} date={cfg.todayStr} complete={complete} t={t} />
+          <SoftHero dayNum={dayNum} done={doneCount} total={total} totalDays={myDays} complete={complete} t={t} />
           {(approved || rejected || (complete && cfg.hasReferee)) && (
             <StatusBanner approved={approved} rejected={rejected} complete={complete} note={log?.judgeNote}
               doneCount={doneCount} total={total} hasReferee={cfg.hasReferee} t={t} />
@@ -394,7 +400,9 @@ export default function Today() {
         <>
           <div className="today-hero">
             <div>
-              <div className="section-label" style={{ margin: '0 0 2px' }}>Today · {cfg.todayStr}</div>
+              {/* The day counter lives here now, not in the header. It is the
+                  number people came for; the ISO date was the filler (Kyle). */}
+              <div className="section-label" style={{ margin: '0 0 2px' }}>Day {dayNum} / {myDays}</div>
               <div className="h-day">DAY {dayNum}</div>
             </div>
             <Ring done={doneCount} total={total} />
@@ -1100,10 +1108,12 @@ export function CaptionSheet({ req, entry, onSave, onClose }) {
 
 // Soft-mode hero: the big centered ring with the serif day number inside and
 // an encouraging voice line below. The small Ring stays untouched for dark mode.
-function SoftHero({ dayNum, done, total, date, complete, t }) {
+function SoftHero({ dayNum, done, total, totalDays, complete, t }) {
   return (
     <div className="soft-hero">
-      <div className="section-label" style={{ margin: 0 }}>Today · {date}</div>
+      {/* The counter Kyle wanted kept, in the slot the ISO date was wasting.
+          It left the header so the name and the avatar could breathe. */}
+      <div className="section-label" style={{ margin: 0 }}>Day {dayNum} / {totalDays}</div>
       <HeroRing done={done} total={total} dayNum={dayNum} />
       <p className="sh-line">
         {complete ? t('today.hero.done') : t('today.hero.encourage', { k: total - done, total })}

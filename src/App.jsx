@@ -467,8 +467,7 @@ export default function App() {
           {tabs.map(([key, icon, label]) => (
             <button key={key} className={'tab' + (activeView === key ? ' active' : '')} onClick={() => setView(key)}
               aria-label={label} aria-current={activeView === key ? 'page' : undefined}>
-              <Icon name={icon} size={23} />
-              {/* The label stays for screen readers; the icon is the UI. */}
+              <Icon name={icon} size={22} />
               <span className="tab-label">{label}</span>
               {key === 'judge' && <JudgeBadge />}
             </button>
@@ -1298,14 +1297,16 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
    blooms through rather than greying out, a thin body so it reads as glass
    and not as paint, and a specular edge, bright along the top where light
    would catch a curve and dark along the bottom where it falls away.
-   Contrast comes from the FILL, not from a drop shadow: a shadow makes a
-   thing look stuck on the screen, a darker fill makes it look like glass over
-   what is behind it (Dylan). Fully round, not squircle. */
+   Contrast comes from the fill rather than a drop shadow (Dylan), but lightly:
+   a heavy tint stops reading as glass and starts reading as a solid bar, which
+   is what the first darker pass looked like (Kyle). Fully round, not
+   squircle. */
 .tabbar{position:fixed;left:14px;right:14px;z-index:40;max-width:412px;
   margin:0 auto;bottom:calc(14px + env(safe-area-inset-bottom));
   display:flex;gap:2px;padding:6px;border-radius:999px;isolation:isolate;
-  background:color-mix(in srgb,var(--nav-tint,#000) var(--nav-tint-o,14%),transparent);
-  -webkit-backdrop-filter:blur(30px) saturate(190%);backdrop-filter:blur(30px) saturate(190%);
+  background:color-mix(in srgb,var(--bg) 54%,transparent);
+  -webkit-backdrop-filter:blur(30px) saturate(200%) brightness(1.05);
+  backdrop-filter:blur(30px) saturate(200%) brightness(1.05);
   border:1px solid color-mix(in srgb,var(--text) 8%,transparent);
   box-shadow:0 2px 10px -8px rgba(0,0,0,.22),
              inset 0 1px 0 color-mix(in srgb,#fff 30%,transparent),
@@ -1320,10 +1321,10 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 }
 /* Icons only. The labels were four words of chrome under four clear symbols
    (Dylan); the name of the tab is on the screen you land on. */
-.tab{flex:1;display:flex;align-items:center;justify-content:center;padding:11px 4px;border-radius:999px;
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:999px;
   color:var(--muted-2);position:relative;
   transition:color .2s,background .2s,transform .34s cubic-bezier(.34,1.56,.64,1)}
-.tab-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.tab-label{font-family:var(--cond);font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase}
 .tab.active{color:var(--text);
   background:color-mix(in srgb,var(--text) 8%,transparent);
   box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 24%,transparent)}
