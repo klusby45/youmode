@@ -394,8 +394,9 @@ export default function App() {
           )}
           <div className="daypill">
             {dayNum < 1 ? (
-              // Countdown beats a vague "starts soon" (Miska).
-              <>{1 - dayNum === 1 ? 'STARTS TOMORROW' : `STARTS IN ${1 - dayNum} DAYS`}</>
+              // The countdown moved into the Today screen, where the waiting is
+              // the subject. Up here it crowded the name and the avatar.
+              <>SOON</>
             ) : dayNum > myDays ? <>COMPLETE</> : (
               <><span className="daypill-k">DAY</span><span className="daypill-n">{dayNum}</span><span className="daypill-t">/ {myDays}</span></>
             )}
@@ -415,7 +416,7 @@ export default function App() {
                 <span className="avatar" style={{ '--ac': myMember?.accent || mapAccent(theme, '#FF3B30') }}>{me.displayName[0]}</span>
               )}
             </button>
-            <button className="iconbtn" onClick={signOut} title="Sign out"><Icon name="logout" size={18} /></button>
+
           </div>
         </header>
         {youOpen && (
@@ -425,12 +426,14 @@ export default function App() {
             onToggleReq={async (reqId, next) => { await api.setReqPrivacy(reqId, next); await refresh() }}
             showPrivacy={!isReferee}
             email={me.email}
+            username={me.username}
             displayName={me.displayName}
             timezone={me.timezone} challengeTimezone={active?.challenge?.timezone}
             dayEndHour={me.dayEndHour}
             onSaveDayClock={async (v) => { await api.saveDayClock(me.id, v); await refresh() }}
             onSaveName={async (v) => { await api.saveDisplayName(me.id, v); await refresh() }}
             onSaveEmail={async (v) => { await api.saveEmail(me.id, v); await refresh() }}
+            onSignOut={signOut}
             onDeleteAccount={deleteAccount}
             onEditChecklist={!isReferee ? () => { setYouOpen(false); setEditingList(true) } : null}
             onNewChallenge={() => { setYouOpen(false); setCreatingNew(true) }}
@@ -1026,6 +1029,15 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   background:rgba(0,0,0,.55);padding:1px 0}
 .pr-scrub{display:flex;align-items:center;gap:8px}
 .pr-scrub input{flex:1;accent-color:var(--brand)}
+/* Waiting for day one: the countdown, a real date, and a look at the list. */
+.notyet{padding:26px 0 8px;text-align:center}
+.notyet .e-ic{opacity:.55;margin-bottom:10px}
+.ny-count{font-family:var(--cond);font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  font-size:12px;color:var(--brand)}
+.notyet > p{margin:6px auto 0;max-width:32ch;font-size:14px;line-height:1.6}
+.ny-peek{margin-top:26px;text-align:left;opacity:.72}
+.ny-peek .section-label{justify-content:flex-start}
+.slot.preview,.watertoggle.preview{pointer-events:none}
 /* Note items: the question, your last answer, and room to write. */
 .noterow{text-align:left}
 .note-prev{background:var(--panel-2);border-left:2px solid var(--line-2);border-radius:0 10px 10px 0;

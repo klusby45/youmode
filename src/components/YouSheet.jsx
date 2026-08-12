@@ -12,7 +12,7 @@ export default function YouSheet({
   sharing, onPickSharing, photoReqs = [], onToggleReq, showPrivacy = true,
   displayName, onSaveName,
   timezone, challengeTimezone, dayEndHour, onSaveDayClock,
-  email, onSaveEmail, onDeleteAccount, onEditChecklist, onNewChallenge, onExport, onClose,
+  email, username, onSaveEmail, onSignOut, onDeleteAccount, onEditChecklist, onNewChallenge, onExport, onClose,
 }) {
   return (
     <Sheet onClose={onClose}>
@@ -68,7 +68,8 @@ export default function YouSheet({
       )}
       {onSaveName && <DisplayName name={displayName} onSave={onSaveName} />}
       {onSaveEmail && <RecoveryEmail email={email} onSave={onSaveEmail} />}
-      {onDeleteAccount && <DeleteAccount onDelete={onDeleteAccount} />}
+      {onSignOut && <SignOut onSignOut={onSignOut} />}
+      {onDeleteAccount && <DeleteAccount onDelete={onDeleteAccount} username={username} />}
     </Sheet>
   )
 }
@@ -206,12 +207,44 @@ function RecoveryEmail({ email, onSave }) {
   )
 }
 
+// Sign out used to be an icon in the top bar, one thumb-width from the avatar,
+// firing on the first tap. Miska hit it reaching for her settings and was gone.
+// It lives down here with the other account actions now, and it asks first.
+function SignOut({ onSignOut }) {
+  const [confirming, setConfirming] = useState(false)
+  if (!confirming) {
+    return (
+      <button className="theme-opt set-action danger-opt" onClick={() => setConfirming(true)}>
+        <Icon name="logout" size={18} />
+        <span className="to-label">Sign out</span>
+      </button>
+    )
+  }
+  return (
+    <div className="danger-confirm">
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Sign out?</div>
+      <p className="muted" style={{ fontSize: 12, margin: '0 0 12px' }}>
+        Your challenge and everything in it stays exactly where it is.
+      </p>
+      <div className="review-actions">
+        <button className="btn btn-ghost" onClick={() => setConfirming(false)}>Stay signed in</button>
+        <button className="btn btn-accent" onClick={onSignOut}>Sign out</button>
+      </div>
+    </div>
+  )
+}
+
 // Irreversible — a two-step confirm guards it. On success the app clears the
 // session and returns to the login screen, so this component just unmounts.
-function DeleteAccount({ onDelete }) {
+// Two taps was still two taps. Typing your own username is the only guard
+// that a thumb cannot satisfy by accident, and this is the one action in the
+// app with nothing behind it: no undo, no export afterwards, no support desk.
+function DeleteAccount({ onDelete, username }) {
   const [confirming, setConfirming] = useState(false)
+  const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
+  const matches = username && typed.trim().toLowerCase() === username.toLowerCase()
   return (
     <>
       <div className="set-label"><Icon name="logout" size={13} />Account</div>
@@ -221,14 +254,22 @@ function DeleteAccount({ onDelete }) {
         </button>
       ) : (
         <div className="danger-confirm">
-          <p className="muted" style={{ fontSize: 12, margin: '0 0 12px' }}>
-            This permanently deletes your account, your logged proof, and your goals. It can't be undone.
-            Challenges you own pass to a teammate.
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Delete your account?</div>
+          <p className="muted" style={{ fontSize: 12, margin: '0 0 12px', lineHeight: 1.55 }}>
+            Every photo you have logged, every day you have completed, and every goal you have set is
+            deleted for good. There is no undo and no way to get it back. Challenges you own pass to a
+            teammate. If you just want to step away, sign out instead.
           </p>
+          <label className="muted" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
+            Type <b style={{ color: 'var(--text)' }}>{username}</b> to confirm
+          </label>
+          <input className="fr-input" style={{ width: '100%', marginBottom: 10 }} value={typed}
+            autoCapitalize="none" autoCorrect="off" spellCheck="false" placeholder={username}
+            onChange={(e) => { setTyped(e.target.value); setErr(null) }} />
           {err && <div className="login-err" style={{ textAlign: 'left', marginBottom: 10 }}>{err}</div>}
           <div className="review-actions">
-            <button className="btn btn-ghost" disabled={busy} onClick={() => { setConfirming(false); setErr(null) }}>Keep my account</button>
-            <button className="btn btn-danger" disabled={busy} onClick={async () => {
+            <button className="btn btn-ghost" disabled={busy} onClick={() => { setConfirming(false); setTyped(''); setErr(null) }}>Keep my account</button>
+            <button className="btn btn-danger" disabled={busy || !matches} onClick={async () => {
               setBusy(true); setErr(null)
               try { await onDelete() } catch (e) { setErr(e.message); setBusy(false) }
             }}>{busy ? 'Deleting…' : 'Delete forever'}</button>

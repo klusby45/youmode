@@ -76,6 +76,11 @@ const C = {
     coach: ({ name, start }) => `${name} begins on ${start}. Rest up and be ready.`,
     monk: ({ name, start }) => `${name} begins on ${start}. Rest well.`,
   },
+  'today.notstarted.peek': {
+    hardcore: () => 'This is day one.',
+    coach: () => "Here's what day one looks like.",
+    monk: () => 'Day one, waiting for you.',
+  },
   'today.finished.title': {
     hardcore: ({ n }) => `${n} days done`,
   },

@@ -169,11 +169,60 @@ export default function Today() {
   }
 
   if (dayNum < 1) {
+    // The countdown used to sit in the header, crowded between the challenge
+    // name and the avatar. It belongs here, where the waiting is the subject.
+    // And a date reads as a date: "August 14", not 2026-08-14 (Miska).
+    const away = 1 - dayNum
+    const startsPretty = new Date(cfg.startStr + 'T00:00:00')
+      .toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+    // Local lists. The shared ones are declared further down this component,
+    // and reaching forward from an early return is a temporal dead zone: the
+    // same mistake that blanked the app an hour ago, in a branch only someone
+    // with a future start date ever reaches, which is why it got past me.
+    const isDay = (r) => r.frequency !== 'weekly' && r.frequency !== 'monthly'
+    const peekPhotos = reqs.filter((r) => r.kind === 'photo' && isDay(r) && !api.isExtraMeal(r))
+    const peekChecks = reqs.filter((r) => r.kind === 'check' && isDay(r))
+    const peekNotes = reqs.filter((r) => r.kind === 'note' && isDay(r))
     return (
-      <div className="empty">
+      <div className="notyet">
         <div className="e-ic"><Icon name="clock" size={40} /></div>
-        <div className="screen-title" style={{ fontSize: 22 }}>Not started yet</div>
-        <p>{t('today.notstarted.sub', { name: challenge.name, start: cfg.startStr })}</p>
+        <div className="ny-count">{away === 1 ? 'Starts tomorrow' : `Starts in ${away} days`}</div>
+        <div className="screen-title" style={{ fontSize: 22, marginTop: 2 }}>Not started yet</div>
+        <p className="muted">{t('today.notstarted.sub', { name: challenge.name, start: startsPretty })}</p>
+
+        {/* A look at day one while you wait. Curiosity is the point: nobody
+            gets more excited about a challenge they cannot see yet. */}
+        <div className="ny-peek">
+          <div className="section-label">{t('today.notstarted.peek')}</div>
+          <div className="slots-grid">
+            {peekPhotos.slice(0, 4).map((r) => (
+              <div key={r.id} className="slot preview">
+                <span className="slot-ic"><Icon name={r.icon || 'camera'} size={22} /></span>
+                <span className="slot-label">{r.label}</span>
+                <span className="slot-hint">{r.hint || 'Photo proof'}</span>
+              </div>
+            ))}
+          </div>
+          {peekChecks.map((r) => (
+            <div key={r.id} className="watertoggle preview" style={{ marginBottom: 8 }}>
+              <span className="wt-box" />
+              <span style={{ flex: 1 }}>
+                <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
+                <span className="wt-hint">{r.hint || 'Just check it'}</span>
+              </span>
+              <Icon name={r.icon || 'bolt'} size={22} style={{ color: 'var(--muted-2)' }} />
+            </div>
+          ))}
+          {peekNotes.map((r) => (
+            <div key={r.id} className="watertoggle preview" style={{ marginBottom: 8 }}>
+              <span className="wt-box"><Icon name="edit" size={16} /></span>
+              <span style={{ flex: 1 }}>
+                <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
+                <span className="wt-hint">{r.hint || 'Write a few words about it'}</span>
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }

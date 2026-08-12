@@ -99,7 +99,10 @@ export default function History() {
 
       <div className="legend">
         <span><i style={{ background: 'var(--green)' }} />Approved</span>
-        <span><i style={{ background: 'var(--amber)' }} />Awaiting referee</span>
+        {/* "Referee" reads as a third person even when there isn't one, which is
+            confusing on a solo run. The state is the same either way: logged,
+            not yet checked off as good. */}
+        <span><i style={{ background: 'var(--amber)' }} />Awaiting review</span>
         <span><i style={{ background: 'var(--red)' }} />Failed</span>
         {/* Only shown once someone has actually spent a save — no point
             explaining a state nobody in this challenge is in. */}
