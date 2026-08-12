@@ -85,13 +85,17 @@ export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMove
       {/* Four supplements as four tiles is a lot of screen for four taps.
           Items sharing a group name collapse into one (Miska). */}
       {/* Picking beats spelling. Typing the group name on every item meant
-          one typo made a second group of one (Miska). */}
+          one typo made a second group of one (Miska). Only offered on checks:
+          grouping collapses items into chips, which is the wrong shape for a
+          photo tile, and offering it there would promise something that does
+          not happen. */}
+      {it.kind === 'check' && (
       <div className="br-group">
         <label>Group</label>
         <select className="br-group-in" value={it.group || ''}
           onChange={(e) => {
             if (e.target.value !== '__new') { onChange({ group: e.target.value || null }); return }
-            const name = window.prompt('Name this group', 'Supplements')
+            const name = window.prompt('Name this group')
             if (name && name.trim()) onChange({ group: name.trim().slice(0, 24) })
           }}>
           <option value="">No group</option>
@@ -100,6 +104,7 @@ export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMove
           <option value="__new">+ New group…</option>
         </select>
       </div>
+      )}
 
       {it.frequency !== 'weekly' && it.frequency !== 'monthly' && (
         <div className="br-due">

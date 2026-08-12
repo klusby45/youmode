@@ -1055,7 +1055,21 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .grp-chip.on{border-color:var(--blue);color:var(--text);background:color-mix(in srgb,var(--blue) 12%,transparent)}
 .grp-chip .gc-box{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--line-2);display:grid;place-items:center;flex:none}
 .grp-chip.on .gc-box{background:var(--blue);border-color:var(--blue);color:#fff}
-/* Note items: the question, your last answer, and room to write. */
+/* A note written in place: the question, last time's answer, one line. */
+.noteline{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
+.noteline.done{background:var(--panel-2)}
+.nl-head{display:flex;align-items:center;gap:8px}
+.nl-box{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--line-2);display:grid;place-items:center;
+  color:var(--muted-2);flex:none}
+.noteline.done .nl-box{background:var(--green);border-color:var(--green);color:#fff}
+.nl-title{font-weight:650;font-size:15px;flex:1}
+.nl-q{font-size:12px;color:var(--muted);margin:6px 0 0;line-height:1.45}
+.nl-prev{font-size:12px;color:var(--muted);background:var(--panel-2);border-radius:8px;padding:7px 9px;margin-top:8px;line-height:1.45}
+.nl-prev b{color:var(--muted-2);font-weight:600;margin-right:4px}
+.nl-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.nl-in{flex:1;font-size:14px}
+.nl-save{flex:none;min-width:56px}
+
 .noterow{text-align:left}
 .note-prev{background:var(--panel-2);border-left:2px solid var(--line-2);border-radius:0 10px 10px 0;
   padding:10px 12px;margin-bottom:12px;font-size:13px;line-height:1.5;color:var(--muted)}

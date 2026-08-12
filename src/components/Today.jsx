@@ -19,7 +19,6 @@ export default function Today() {
   const [saving, setSaving] = useState(null) // requirement id of an in-flight check
   const [saveErr, setSaveErr] = useState(null)
   const [captioning, setCaptioning] = useState(null) // { req, entry } meal being described
-  const [noting, setNoting] = useState(null) // { req } note item being written
   const [more, setMore] = useState(false) // macro bar: show the secondary numbers
 
   const reqs = reqsFor(me.id)
@@ -163,6 +162,25 @@ export default function Today() {
     }
   }
 
+  // Your last answer for this item, so a note is written against your own
+  // record rather than into a void.
+  function prevNote(reqId) {
+    for (const l of myLogs.filter((x) => x.logDate < cfg.todayStr).sort((a, b) => b.logDate.localeCompare(a.logDate))) {
+      const e = l.entriesByReq?.[reqId]
+      if (e?.caption) return { date: l.logDate, text: e.caption }
+    }
+    return null
+  }
+
+  async function saveNoteFor(req, text) {
+    setSaveErr(null)
+    try {
+      await actions.saveNote(challenge.id, me.id, cfg.todayStr, req, text)
+      tapHaptic()
+      await actions.refresh()
+    } catch { setSaveErr(`"${req.label}" didn't save. Try again.`) }
+  }
+
   async function dismissFlag(entry) {
     await actions.dismissAiFlag(entry.id)
     await actions.refresh()
@@ -182,6 +200,12 @@ export default function Today() {
     const isDay = (r) => r.frequency !== 'weekly' && r.frequency !== 'monthly'
     const peekPhotos = reqs.filter((r) => r.kind === 'photo' && isDay(r) && !api.isExtraMeal(r))
     const peekChecks = reqs.filter((r) => r.kind === 'check' && isDay(r))
+    // Same grouping the live screen uses. Without this, someone previewing
+    // day one sees a flat list and reasonably concludes grouping did nothing.
+    const peekGroupOf = (r) => (r.group && r.group !== 'Fuel' ? r.group : null)
+    const peekGroups = [...new Set(peekChecks.map(peekGroupOf).filter(Boolean))]
+      .filter((g) => peekChecks.filter((r) => peekGroupOf(r) === g).length > 1)
+    const peekLoose = peekChecks.filter((r) => !peekGroups.includes(peekGroupOf(r)))
     const peekNotes = reqs.filter((r) => r.kind === 'note' && isDay(r))
     const peekCadence = reqs.filter((r) => (r.frequency === 'weekly' || r.frequency === 'monthly') && !api.isExtraMeal(r))
     return (
@@ -204,12 +228,28 @@ export default function Today() {
               </div>
             ))}
           </div>
-          {peekChecks.map((r) => (
+          {peekGroups.map((g) => {
+            const items = peekChecks.filter((r) => peekGroupOf(r) === g)
+            return (
+              <div key={g} className="grp">
+                <div className="grp-head">
+                  <span className="grp-name">{g}</span>
+                  <span className="grp-count">0 of {items.length}</span>
+                </div>
+                <div className="grp-items">
+                  {items.map((r) => (
+                    <span key={r.id} className="grp-chip"><span className="gc-box" />{r.label}</span>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+          {peekLoose.map((r) => (
             <div key={r.id} className="watertoggle preview" style={{ marginBottom: 8 }}>
               <span className="wt-box" />
               <span style={{ flex: 1 }}>
                 <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
-                <span className="wt-hint">{r.hint || 'Just check it'}</span>
+                {r.hint && <span className="wt-hint">{r.hint}</span>}
               </span>
               <Icon name={r.icon || 'bolt'} size={22} style={{ color: 'var(--muted-2)' }} />
             </div>
@@ -453,28 +493,11 @@ export default function Today() {
         )
       })}
 
-      {notes.map((r) => {
-        const entry = log?.entriesByReq?.[r.id]
-        const on = entrySatisfies(r, entry)
-        return (
-          <button key={r.id} className={'watertoggle noterow' + (on ? ' on' : '')}
-            onClick={() => editable && setNoting({ req: r })} disabled={!editable}
-            style={{ marginBottom: 8 }}>
-            <span className="wt-box" style={on ? { background: 'var(--green)', borderColor: 'var(--green)', color: '#fff' } : undefined}>
-              {on ? <Icon name="check" size={18} /> : <Icon name="edit" size={16} />}
-            </span>
-            <span style={{ flex: 1 }}>
-              <span className="wt-title" style={{ display: 'block' }}>
-                {r.label}{' '}<DueBadge req={r} entry={entry} cfg={cfg} />
-              </span>
-              <span className="wt-hint">
-                {on ? entry.caption : (r.hint || 'Write a few words about it')}
-              </span>
-            </span>
-            <Icon name="chevron" size={18} style={{ color: 'var(--muted-2)' }} />
-          </button>
-        )
-      })}
+      {notes.map((r) => (
+        <NoteLine key={r.id} req={r} entry={log?.entriesByReq?.[r.id]} cfg={cfg} editable={editable}
+          previous={prevNote(r.id)}
+          onSave={(text) => saveNoteFor(r, text)} />
+      ))}
 
       {checks.map((r) => {
         const entry = log?.entriesByReq?.[r.id]
@@ -496,7 +519,7 @@ export default function Today() {
                 {busy ? 'Saving…'
                   : on ? `Saved ✓${r.hint ? ' · ' + r.hint : ''}`
                   : target > 1 ? `${count} of ${target} today — tap to log one${r.hint ? ' · ' + r.hint : ''}`
-                  : (r.hint || 'Just check it')}
+                  : (r.hint || '')}
               </span>
             </span>
             <Icon name={r.icon || 'bolt'} size={22} style={{ color: on ? 'var(--blue)' : 'var(--muted-2)' }} />
@@ -601,30 +624,6 @@ export default function Today() {
           name={challenge.name} onClose={() => setCelebrate(false)} />
       )}
 
-      {noting && (
-        <NoteSheet req={noting.req} entry={log?.entriesByReq?.[noting.req.id]}
-          previous={(() => {
-            // Your own last answer, shown while you write the next one. This
-            // is the part that makes a note more than a tick: you are writing
-            // against your own record, not into a void.
-            for (const l of myLogs.filter((x) => x.logDate < cfg.todayStr).sort((a, b) => b.logDate.localeCompare(a.logDate))) {
-              const e = l.entriesByReq?.[noting.req.id]
-              if (e?.caption) return { date: l.logDate, text: e.caption }
-            }
-            return null
-          })()}
-          onClose={() => setNoting(null)}
-          onSave={async (text) => {
-            const req = noting.req
-            setNoting(null)
-            setSaveErr(null)
-            try {
-              await actions.saveNote(challenge.id, me.id, cfg.todayStr, req, text)
-              tapHaptic()
-              await actions.refresh()
-            } catch { setSaveErr(`"${req.label}" didn't save. Try again.`) }
-          }} />
-      )}
       {captioning && (
         <CaptionSheet req={captioning.req} entry={captioning.entry}
           onSave={async (text) => {
@@ -944,39 +943,50 @@ function MacroRow({ label, value, unit, target, max, ceiling }) {
 
 // One-line meal description, edited in a small sheet; the AI reads photo +
 // caption to estimate macros, which render on the tile itself.
-// A note item's sheet. The question the item asks, what you said last time,
-// and a box. No bank screenshots, no honour-system tick.
-export function NoteSheet({ req, entry, previous, onSave, onClose }) {
-  const [text, setText] = useState(entry?.caption || '')
+// A note, written where it lives. It used to open a whole sheet, which is a
+// lot of ceremony for one line (Miska): type it, save it, done. Your last
+// answer sits above the box, because writing against your own record is the
+// part a checkbox cannot do.
+export function NoteLine({ req, entry, cfg, editable, previous, onSave }) {
+  const saved = (entry?.caption || '').trim()
+  const [text, setText] = useState(saved)
   const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState(false)
+  useEffect(() => { setText(saved) }, [saved])
+  const done = saved.length >= MIN_NOTE
   const left = MIN_NOTE - text.trim().length
-  const ok = left <= 0
+  const dirty = text.trim() !== saved
+
+  async function save() {
+    if (left > 0 || busy) return
+    setBusy(true)
+    try { await onSave(text) } finally { setBusy(false); setOpen(false) }
+  }
+
   return (
-    <Sheet onClose={onClose} position="top">
-      <div className="screen-title" style={{ fontSize: 20, marginBottom: 4 }}>{req.label}</div>
-      <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>
-        {req.hint || 'What happened, and what is next?'}
-      </p>
-      {previous && (
-        <div className="note-prev">
-          <span className="np-when">Last time · {previous.date}</span>
-          {previous.text}
-        </div>
-      )}
-      <textarea className="fr-input note-in" rows={5} autoFocus value={text}
-        placeholder="A few words is enough, as long as they are true."
-        onChange={(e) => setText(e.target.value)} />
-      <div className="review-actions" style={{ marginTop: 10 }}>
-        <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-        <button className="btn btn-go" disabled={!ok || busy}
-          onClick={() => { setBusy(true); onSave(text) }}>
-          {busy ? 'Saving…' : ok ? 'Save' : `${left} more`}
-        </button>
+    <div className={'noteline' + (done ? ' done' : '')}>
+      <div className="nl-head">
+        <span className="nl-box">{done ? <Icon name="check" size={14} strokeWidth={3} /> : <Icon name="edit" size={13} />}</span>
+        <span className="nl-title">{req.label}</span>
+        <DueBadge req={req} entry={entry} cfg={cfg} />
       </div>
-      <p className="muted" style={{ fontSize: 12, margin: '10px 2px 0' }}>
-        Only you see this{req.isPrivate ? '' : ', and your referee if you have one'}.
-      </p>
-    </Sheet>
+      {req.hint && <div className="nl-q">{req.hint}</div>}
+      {previous && !done && (
+        <div className="nl-prev"><b>Last time</b> {previous.text}</div>
+      )}
+      <div className="nl-row">
+        <input className="fr-input nl-in" value={text} disabled={!editable || busy}
+          placeholder={done ? '' : 'A line is enough, as long as it is true'}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save() }} />
+        {(dirty || open) && (
+          <button className="btn btn-go btn-sm nl-save" disabled={left > 0 || busy || !dirty} onClick={save}>
+            {busy ? '…' : left > 0 ? left : 'Save'}
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
