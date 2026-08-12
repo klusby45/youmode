@@ -43,6 +43,29 @@ export default function Onboard({ profile, onDone, signOut, onCancel, onUseGuide
   const [role, setRole] = useState('participant')
   const [joinStake, setJoinStake] = useState('')
 
+  // Reordering is how related items end up together (Miska: two supplements
+
+  // side by side). sort is written from array position on save.
+
+  function moveItem(i, d) {
+
+    setItems((xs) => {
+
+      const j = i + d
+
+      if (j < 0 || j >= xs.length) return xs
+
+      const n = [...xs]
+
+      ;[n[i], n[j]] = [n[j], n[i]]
+
+      return n
+
+    })
+
+  }
+
+
   function updateItem(i, patch) {
     setItems((xs) => xs.map((x, j) => (j === i ? { ...x, ...patch } : x)))
   }
@@ -207,7 +230,9 @@ export default function Onboard({ profile, onDone, signOut, onCancel, onUseGuide
             {items.map((it, i) => (
               <ItemRowEditor key={i} it={it}
                 onChange={(patch) => updateItem(i, patch)}
-                onRemove={() => removeItem(i)} />
+                onRemove={() => removeItem(i)}
+                onMoveUp={i > 0 ? () => moveItem(i, -1) : null}
+                onMoveDown={i < items.length - 1 ? () => moveItem(i, 1) : null} />
             ))}
             <div className="row-split" style={{ marginTop: 4 }}>
               <button className="btn btn-sm" onClick={() => addItem('photo')}><Icon name="camera" size={14} />Add photo item</button>

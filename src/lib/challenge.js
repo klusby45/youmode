@@ -305,3 +305,40 @@ export function deriveFormat(participantCount) {
   if (participantCount === 2) return 'versus'
   return 'community'
 }
+
+// Deadlines. The app can only observe when proof was LOGGED, never when the
+// walk actually happened, so a missed deadline is recorded and shown, not
+// used to fail the day. Someone who walks at 11 and uploads at 1 has done the
+// thing; calling that a failure would be the app lying about what it knows.
+export function dueLabel(mins) {
+  if (mins == null) return null
+  const h = Math.floor(mins / 60), m = mins % 60
+  const ampm = h < 12 ? 'am' : 'pm'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return m ? `${h12}:${String(m).padStart(2, '0')}${ampm}` : `${h12}${ampm}`
+}
+
+// Everything below measures from the START of the member's day, not from
+// midnight. With a 2am rollover the day starts at 2am, so 12:50am is 1370
+// minutes in, not 50. Getting this wrong made a 12:50am tick against a 1:30am
+// deadline read as late, which is the exact case the rollover exists for.
+function shiftedMinutes(at, tz, dayEndHour) {
+  const d = dayEndHour ? new Date(at.getTime() - dayEndHour * 3600000) : at
+  const [h, m] = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d).split(':').map(Number)
+  return h * 60 + m
+}
+
+// A deadline is written in wall-clock time ("noon", "1:30am"). Move it onto
+// the same shifted scale before comparing.
+export const dueMinutes = (dueBy, dayEndHour = 0) => (dueBy - dayEndHour * 60 + 1440) % 1440
+
+export function minutesIntoDay(tz, dayEndHour = 0) {
+  return shiftedMinutes(new Date(), tz, dayEndHour)
+}
+
+export function loggedLate(req, entry, tz, dayEndHour = 0) {
+  if (req?.dueBy == null || !entry?.loggedAt) return null
+  return shiftedMinutes(new Date(entry.loggedAt), tz, dayEndHour) > dueMinutes(req.dueBy, dayEndHour)
+}

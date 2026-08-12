@@ -15,6 +15,29 @@ export default function EditChecklistSheet({ reqs, onSave, onClose }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
 
+  // Reordering is how related items end up together (Miska: two supplements
+
+  // side by side). sort is written from array position on save.
+
+  function moveItem(i, d) {
+
+    setItems((xs) => {
+
+      const j = i + d
+
+      if (j < 0 || j >= xs.length) return xs
+
+      const n = [...xs]
+
+      ;[n[i], n[j]] = [n[j], n[i]]
+
+      return n
+
+    })
+
+  }
+
+
   const updateItem = (i, patch) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, ...patch } : x)))
   const removeItem = (i) => setItems((xs) => xs.filter((_, j) => j !== i))
   const addItem = (kind) => setItems((xs) => [...xs, { key: '', label: '', hint: '', group: 'Custom', icon: kind === 'photo' ? 'camera' : kind === 'timer' ? 'clock' : 'bolt', kind, ...(kind === 'timer' ? { minMinutes: 10 } : {}) }])
@@ -93,7 +116,9 @@ export default function EditChecklistSheet({ reqs, onSave, onClose }) {
       {items.map((it, i) => (
         <ItemRowEditor key={it.id || 'new-' + i} it={it}
           onChange={(patch) => updateItem(i, patch)}
-          onRemove={() => removeItem(i)} />
+          onRemove={() => removeItem(i)}
+          onMoveUp={i > 0 ? () => moveItem(i, -1) : null}
+          onMoveDown={i < items.length - 1 ? () => moveItem(i, 1) : null} />
       ))}
       <div className="add-row">
         <button className="btn btn-sm" onClick={() => addItem('photo')}><Icon name="camera" size={14} />Photo</button>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useApp } from '../appContext.js'
 import { isMealReq, mealStats } from '../config.js'
-import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, checkCount, weeklyProgress, monthlyProgress, mealProgress, SAVE_WINDOW_DAYS } from '../lib/challenge.js'
+import { canEditDay, currentDayNumber, isLogComplete, logDone, logTotal, entrySatisfies, checkCount, weeklyProgress, monthlyProgress, mealProgress, dueLabel, loggedLate, minutesIntoDay, dueMinutes, SAVE_WINDOW_DAYS } from '../lib/challenge.js'
 import { IS_MOBILE } from '../lib/device.js'
 import { tapHaptic } from '../lib/native.js'
 import * as api from '../data.js'
@@ -332,7 +332,7 @@ export default function Today() {
           <PhotoSlot key={r.id} req={r} entry={log?.entriesByReq?.[r.id]} editable={editable}
             uploading={uploading === r.id} onPick={(f) => onPick(r, f)} onClear={() => onClearPhotos(r)}
             mealMode={isMealReq(r)}
-            onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} />
+            onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} cfg={cfg} />
         ))}
         {editable && nextExtra && (
           <AddMealSlot uploading={uploading === nextExtra.id} onPick={(f) => onPick(nextExtra, f)} captureOnly={nextExtra.captureOnly} />
@@ -353,7 +353,9 @@ export default function Today() {
               {on ? <Icon name="check" size={18} /> : (target > 1 && count > 0 ? <span className="wt-count">{count}</span> : null)}
             </span>
             <span style={{ flex: 1 }}>
-              <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
+              <span className="wt-title" style={{ display: 'block' }}>
+                {r.label}{' '}<DueBadge req={r} entry={entry} cfg={cfg} />
+              </span>
               <span className="wt-hint">
                 {busy ? 'Saving…'
                   : on ? `Saved ✓${r.hint ? ' · ' + r.hint : ''}`
@@ -404,7 +406,7 @@ export default function Today() {
                   <PhotoSlot req={r} entry={log?.entriesByReq?.[r.id]} editable={editable}
                     uploading={uploading === r.id} onPick={(f) => onPick(r, f)} onClear={() => onClearPhotos(r)}
                     mealMode={!!myPlan && isMealReq(r)}
-                    onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} />
+                    onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} cfg={cfg} />
                 </div>
               </div>
             )
@@ -443,7 +445,7 @@ export default function Today() {
                   <PhotoSlot req={r} entry={log?.entriesByReq?.[r.id]} editable={editable}
                     uploading={uploading === r.id} onPick={(f) => onPick(r, f)} onClear={() => onClearPhotos(r)}
                     mealMode={!!myPlan && isMealReq(r)}
-                    onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} />
+                    onCaption={() => setCaptioning({ req: r, entry: log?.entriesByReq?.[r.id] })} cfg={cfg} />
                 </div>
               </div>
             )
@@ -487,7 +489,24 @@ export default function Today() {
   )
 }
 
-export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, mealMode, onCaption }) {
+// "by noon" on the tile, and an honest mark when it slipped. The app knows
+// when proof was LOGGED, never when the walk happened, so a late mark is a
+// record and not a failure: someone who walks at 11 and uploads at 1 did the
+// thing, and calling that a miss would be the app lying about what it saw.
+export function DueBadge({ req, entry, cfg }) {
+  if (req?.dueBy == null) return null
+  const late = loggedLate(req, entry, cfg.timezone, cfg.dayEndHour)
+  const done = !!entry && (entry.photoPaths?.length || entry.photoPath || entry.checked || entry.checkCount > 0)
+  const overdue = !done && minutesIntoDay(cfg.timezone, cfg.dayEndHour) > dueMinutes(req.dueBy, cfg.dayEndHour)
+  return (
+    <span className={'due-pill' + (late || overdue ? ' late' : '')}>
+      <Icon name="clock" size={9} />
+      {late ? `after ${dueLabel(req.dueBy)}` : overdue ? `was due ${dueLabel(req.dueBy)}` : `by ${dueLabel(req.dueBy)}`}
+    </span>
+  )
+}
+
+export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, mealMode, onCaption, cfg }) {
   const paths = entry?.photoPaths?.length ? entry.photoPaths : (entry?.photoPath ? [entry.photoPath] : [])
   const filled = paths.length > 0
   const flagged = entry?.aiFlag && !entry.aiDismissed
@@ -534,6 +553,7 @@ export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, me
           button in the corner of a tile people tap to look at their own photo
           is how a logged meal got thrown away. */}
       <span className="slot-label">{req.label}</span>
+      {cfg && <span className="slot-due"><DueBadge req={req} entry={entry} cfg={cfg} /></span>}
       {showCap ? (
         <button className={'slot-cap' + (entry?.caption ? '' : ' empty')}
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCaption() }}>

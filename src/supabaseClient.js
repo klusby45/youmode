@@ -52,6 +52,7 @@ const nReq = (r) => r && ({
   timesPerDay: r.times_per_day ?? null, // check items: completions needed per day (null/1 = once)
   timesPerMonth: r.times_per_month ?? null, // monthly cadence target
   captureOnly: !!r.capture_only, // photo items: camera-only (no uploads) when true
+  dueBy: r.due_by ?? null, // minutes after midnight this is due; null = anytime
 })
 const nEntry = (r) => r && ({
   id: r.id, dayLogId: r.day_log_id, requirementId: r.requirement_id,
@@ -59,6 +60,7 @@ const nEntry = (r) => r && ({
   photoPaths: r.photo_paths?.length ? r.photo_paths : (r.photo_path ? [r.photo_path] : []),
   checked: r.checked, checkCount: r.check_count ?? null,
   aiFlag: r.ai_flag, aiNote: r.ai_note, aiDismissed: r.ai_dismissed,
+  loggedAt: r.logged_at ?? null, // when proof first landed, for on-time checks
   caption: r.caption ?? null, estProtein: r.est_protein ?? null, estCalories: r.est_calories ?? null,
   // Full macro set (est_* columns land with supabase/macro-columns.sql).
   // Undefined pre-migration, which reads the same as null everywhere.
@@ -334,13 +336,14 @@ async function insertRequirementRows(challengeId, userId, items) {
     times_per_month: it.frequency === 'monthly' ? Math.min(10, Math.max(1, Number(it.timesPerMonth) || 1)) : null,
     times_per_day: it.kind === 'check' && Number(it.timesPerDay) > 1 ? Math.min(6, Math.round(Number(it.timesPerDay))) : null,
     capture_only: it.kind === 'photo' ? !!it.captureOnly : false,
+    due_by: it.dueBy ?? null,
   }))
   // Pre-migration repair ladder: strip newer columns, degrade timer→check
   // (the old kind constraint), or BOTH — whichever the error calls for. A
   // timer item created before the SQL lands needs strip AND degrade together.
-  const stripNew = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, times_per_day: _d, times_per_month: _tm, capture_only: _c, ...r }) => r
+  const stripNew = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, times_per_day: _d, times_per_month: _tm, capture_only: _c, due_by: _db, ...r }) => r
   const degradeKind = (r) => (r.kind === 'timer' ? { ...r, kind: 'check' } : r)
-  const MIGRATABLE = /kind|multi|min_minutes|frequency|times_per_week|times_per_day|times_per_month|capture_only/
+  const MIGRATABLE = /kind|multi|min_minutes|frequency|times_per_week|times_per_day|times_per_month|capture_only|due_by/
   let { error } = await supabase.from('requirements').insert(rows)
   if (error) {
     for (const candidate of [rows.map(stripNew), rows.map(degradeKind), rows.map(degradeKind).map(stripNew)]) {
@@ -402,12 +405,13 @@ export async function syncMyRequirements(challengeId, userId, items) {
     times_per_month: it.frequency === 'monthly' ? Math.min(10, Math.max(1, Number(it.timesPerMonth) || 1)) : null,
     times_per_day: it.kind === 'check' && Number(it.timesPerDay) > 1 ? Math.min(6, Math.round(Number(it.timesPerDay))) : null,
     capture_only: it.kind === 'photo' ? !!it.captureOnly : false,
+    due_by: it.dueBy ?? null,
   })
   // Same pre-migration repair ladder as insertRequirementRows: strip newer
   // columns, degrade timer→check, or both.
-  const strip = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, times_per_day: _d, times_per_month: _tm, capture_only: _c, ...r }) => r
+  const strip = ({ multi: _m, min_minutes: _mm, frequency: _f, times_per_week: _t, times_per_day: _d, times_per_month: _tm, capture_only: _c, due_by: _db, ...r }) => r
   const degradeKind = (r) => (r.kind === 'timer' ? { ...r, kind: 'check' } : r)
-  const MIGRATABLE = /kind|multi|min_minutes|frequency|times_per_week|times_per_day|times_per_month|capture_only/
+  const MIGRATABLE = /kind|multi|min_minutes|frequency|times_per_week|times_per_day|times_per_month|capture_only|due_by/
   const writeWithRepairs = async (row, write) => {
     let { error } = await write(row)
     if (error) {
@@ -441,12 +445,21 @@ async function ensureDayLog(challengeId, userId, logDate) {
 }
 
 async function upsertEntry(dayLogId, req, userId, patch) {
-  const { data, error } = await supabase.from('log_entries')
-    .upsert({
-      day_log_id: dayLogId, requirement_id: req.id, challenge_id: req.challengeId,
-      user_id: userId, updated_at: new Date().toISOString(), ...patch,
-    }, { onConflict: 'day_log_id,requirement_id' })
-    .select().single()
+  const now = new Date().toISOString()
+  // Stamp logged_at the first time real proof lands, and never again: this is
+  // what a deadline is measured against, and updated_at moves every time a
+  // caption is edited or a macro estimate is written back.
+  const isProof = patch.photo_path || patch.photo_paths?.length || patch.checked === true || patch.check_count > 0
+  const row = {
+    day_log_id: dayLogId, requirement_id: req.id, challenge_id: req.challengeId,
+    user_id: userId, updated_at: now, ...patch,
+  }
+  const write = async (r) => supabase.from('log_entries')
+    .upsert(r, { onConflict: 'day_log_id,requirement_id' }).select().single()
+
+  let { data, error } = await write(isProof ? { logged_at: now, ...row } : row)
+  // Pre-migration databases have no logged_at; everything else still works.
+  if (error && /logged_at/.test(error.message || '')) ({ data, error } = await write(row))
   if (error) throw error
   return nEntry(data)
 }

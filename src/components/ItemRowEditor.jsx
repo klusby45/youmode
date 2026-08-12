@@ -21,7 +21,20 @@ function GrowText({ className, value, placeholder, ariaLabel, onChange }) {
   )
 }
 
-export default function ItemRowEditor({ it, onChange, onRemove }) {
+// Minutes-after-midnight <-> the "HH:MM" a time input speaks.
+const toClock = (m) => (m == null ? '' : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`)
+const fromClock = (v) => {
+  const [h, m] = String(v || '').split(':').map(Number)
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null
+}
+const clockLabel = (m) => {
+  const h = Math.floor(m / 60), mm = m % 60
+  const ampm = h < 12 ? 'am' : 'pm'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return mm ? `${h12}:${String(mm).padStart(2, '0')}${ampm}` : `${h12}${ampm}`
+}
+
+export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMoveDown }) {
   const wk = it.frequency === 'weekly'
   const mo = it.frequency === 'monthly'
   const perDay = Math.max(1, Number(it.timesPerDay) || 1)
@@ -41,12 +54,44 @@ export default function ItemRowEditor({ it, onChange, onRemove }) {
               onClick={() => onChange({ kind: 'timer', icon: 'clock', captureOnly: false, timesPerDay: null, minMinutes: it.minMinutes || 10 })}>⏱ Timer</button>
           )}
         </div>
+        {/* Put related items next to each other. Two supplements belong side
+            by side; arrows beat drag-and-drop inside a list that scrolls under
+            your thumb. */}
+        {(onMoveUp || onMoveDown) && (
+          <span className="br-move">
+            <button type="button" onClick={onMoveUp} disabled={!onMoveUp} title="Move up" aria-label="Move up">
+              <Icon name="chevron" size={13} style={{ transform: 'rotate(-90deg)' }} />
+            </button>
+            <button type="button" onClick={onMoveDown} disabled={!onMoveDown} title="Move down" aria-label="Move down">
+              <Icon name="chevron" size={13} style={{ transform: 'rotate(90deg)' }} />
+            </button>
+          </span>
+        )}
         <button className="br-del" onClick={onRemove} title="Remove"><Icon name="x" size={15} /></button>
       </div>
       <div className="br-fields">
         <GrowText className="br-label" value={it.label} placeholder="e.g. 45-min workout" ariaLabel="Item name" onChange={(e) => onChange({ label: e.target.value })} />
         <GrowText className="br-hint" value={it.hint || ''} placeholder="detail (optional)" ariaLabel="Detail" onChange={(e) => onChange({ hint: e.target.value })} />
       </div>
+      {it.frequency !== 'weekly' && it.frequency !== 'monthly' && (
+        <div className="br-due">
+          {it.dueBy == null ? (
+            <button type="button" className="br-due-add" onClick={() => onChange({ dueBy: 720 })}>
+              + Add a time
+            </button>
+          ) : (
+            <>
+              <label>Do it by</label>
+              <input type="time" className="br-due-in" value={toClock(it.dueBy)}
+                onChange={(e) => onChange({ dueBy: fromClock(e.target.value) })} />
+              <span className="br-due-say">{clockLabel(it.dueBy)}</span>
+              <button type="button" className="br-due-x" onClick={() => onChange({ dueBy: null })} aria-label="Remove the time">
+                <Icon name="x" size={12} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
       <div className="br-cadence">
         <div className="freq-toggle">
           <button type="button" className={!wk && !mo ? 'on' : ''}

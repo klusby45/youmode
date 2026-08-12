@@ -1020,6 +1020,23 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   background:rgba(0,0,0,.55);padding:1px 0}
 .pr-scrub{display:flex;align-items:center;gap:8px}
 .pr-scrub input{flex:1;accent-color:var(--brand)}
+/* Deadlines and reordering on a checklist row. */
+.br-move{display:inline-flex;gap:2px;margin-left:auto;margin-right:4px}
+.br-move button{width:26px;height:26px;display:grid;place-items:center;border-radius:7px;
+  border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer}
+.br-move button:disabled{opacity:.3}
+.br-due{display:flex;align-items:center;gap:8px;margin:8px 0 0;font-size:12px;color:var(--muted)}
+.br-due-add{background:none;border:1px dashed var(--line-2);border-radius:999px;padding:5px 11px;
+  color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
+.br-due-in{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px;
+  color:var(--text);font:inherit;font-size:12px}
+.br-due-say{font-weight:600;color:var(--text)}
+.br-due-x{background:none;border:none;color:var(--muted-2);cursor:pointer;display:flex;padding:2px}
+/* Today: a deadline on the tile, and the mark when it slipped. */
+.slot-due{position:absolute;left:10px;top:10px;z-index:4}
+.due-pill{display:inline-flex;align-items:center;gap:3px;font-size:10px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 7px}
+.due-pill.late{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 45%,transparent)}
 .de-row{display:flex;flex-wrap:wrap;gap:6px}
 .de-chip{padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);
   color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
