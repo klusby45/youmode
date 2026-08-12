@@ -231,7 +231,11 @@ export default async (req) => {
     // per-message cap is generous; the total cap contains cost.
     const clean = messages.slice(-24).map((m) => ({
       role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: String(m.content || '').slice(0, 12000),
+      // A rambled transcript is the whole point of this screen, and 12k chars
+      // is about eight minutes of talking. Cutting there silently dropped the
+      // end of a long answer, which is the half where people usually say what
+      // they actually want. Well past any real ramble now.
+      content: String(m.content || '').slice(0, 60000),
     }))
     if (clean.reduce((n, m) => n + m.content.length, 0) > 40000) {
       return Response.json({ reply: "That's a lot to hold at once. Give me the short version in one message and I'll build from that.", proposal: null }, { headers: H })
@@ -257,20 +261,31 @@ export default async (req) => {
         }
         ;(async () => {
           try {
+            // The heartbeat above keeps the GATEWAY happy, but the function
+            // itself is killed a little past 30 seconds and no amount of
+            // newlines changes that. A 22 minute ramble measured 27.4s, which
+            // is one long answer away from being cut off holding nothing, so
+            // the work is bounded rather than hoped about.
+            const ctl = new AbortController()
+            const deadline = setTimeout(() => ctl.abort(), 24000)
             const aRes = await fetch('https://api.anthropic.com/v1/messages', {
               method: 'POST',
+              signal: ctl.signal,
               headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
               body: JSON.stringify({
                 model: 'claude-sonnet-5',
-                // Generous ceiling: a deep ramble can spend a lot of tokens on
-                // internal reasoning BEFORE the visible reply + tool JSON. 1500
-                // was enough to exhaust silently (the old '…' bug).
-                max_tokens: 4000,
+                // A deep ramble can spend tokens reasoning before the visible
+                // reply and the tool JSON, and 1500 once exhausted silently.
+                // But 4000 is room to write an essay nobody asked for, and
+                // every one of those tokens is time against the 30s wall. A
+                // short reply plus a twelve item proposal fits here twice over.
+                max_tokens: 2000,
                 system: `${SYSTEM}\n\nToday's date: ${today}.`,
                 tools: [TOOL],
                 messages: clean,
               }),
             })
+            clearTimeout(deadline)
             if (!aRes.ok) {
               console.error('anthropic error', aRes.status, (await aRes.text()).slice(0, 300))
               return send({ reply: "I'm having trouble thinking right now. Try again in a minute.", proposal: null })
@@ -295,6 +310,13 @@ export default async (req) => {
               proposal,
             })
           } catch (e) {
+            if (/abort/i.test(e?.name || '') || /abort/i.test(e?.message || '')) {
+              console.error('onboard-coach: hit the 24s deadline')
+              return send({
+                reply: "That was a lot to take in and I ran out of time on it. Nothing is lost. Tap send again and I'll build it.",
+                proposal: null,
+              })
+            }
             console.error('onboard-coach stream error', String(e?.message || e))
             send({ reply: 'Something went sideways. Try again.', proposal: null })
           }

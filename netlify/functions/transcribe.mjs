@@ -49,7 +49,15 @@ async function handle(req) {
     //    body cap; reject anything larger as insurance.
     const { audio, mimeType } = await req.json()
     if (!audio || typeof audio !== 'string') return Response.json({ error: 'audio required' }, { status: 400 })
-    if (audio.length > 6_000_000) return Response.json({ error: 'recording too long' }, { status: 413 })
+    // Netlify caps a function's request body around 6 MB, so this is a wall we
+    // cannot lift from here, only report honestly. The client segments long
+    // recordings so it should not be reached; if it is, say what to do instead
+    // of failing with a shrug after someone has talked for ten minutes.
+    if (audio.length > 5_600_000) {
+      return Response.json({
+        error: 'That take is too long to send in one piece. Stop it and record again in a few shorter takes, and they will be joined together.',
+      }, { status: 413 })
+    }
     // Browsers append ";codecs=..." to the mime; strip it before lookup.
     const base = String(mimeType || '').split(';')[0].trim().toLowerCase()
     const ext = EXT[base] || 'webm'

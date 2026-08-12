@@ -634,7 +634,12 @@ export async function transcribeAudio(audio, mimeType) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ audio, mimeType }),
   })
-  if (!res.ok) throw new Error('transcription failed')
+  // Surface the server's reason when it has one. "Transcription failed" after
+  // ten minutes of talking tells someone nothing about what to do next.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || 'transcription failed')
+  }
   return res.json() // { text }
 }
 
