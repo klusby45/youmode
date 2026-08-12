@@ -584,7 +584,7 @@ img{display:block;max-width:100%}
 @media (prefers-reduced-motion: reduce){ .splash-brand{animation:none;opacity:1} }
 
 .shell{max-width:600px;margin:0 auto;min-height:100vh;
-  padding-bottom:calc(110px + env(safe-area-inset-bottom));position:relative}
+  padding-bottom:calc(124px + env(safe-area-inset-bottom));position:relative}
 
 /* topbar */
 .topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;
@@ -1276,15 +1276,30 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   font-family:var(--cond);letter-spacing:1px;text-transform:uppercase;color:var(--on-scrim-muted);font-size:11px;pointer-events:none}
 
 /* tabbar */
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;max-width:600px;margin:0 auto;display:flex;
-  padding:8px 8px calc(8px + env(safe-area-inset-bottom));gap:4px;
-  background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 55%,transparent),color-mix(in srgb,var(--bg) 96%,transparent));backdrop-filter:blur(18px);
-  border-top:1px solid var(--line)}
-.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:14px;
+/* Floating glass island. Detached from the edges so the content scrolls
+   under it, frosted rather than opaque so the page still reads through, and
+   an inner top highlight plus a hairline border to keep the edge crisp on
+   both the cream and the near-black themes. */
+.tabbar{position:fixed;left:14px;right:14px;z-index:40;max-width:412px;
+  margin:0 auto;bottom:calc(12px + env(safe-area-inset-bottom));
+  display:flex;gap:2px;padding:7px;border-radius:26px;
+  background:color-mix(in srgb,var(--bg) 72%,transparent);
+  -webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
+  border:1px solid color-mix(in srgb,var(--text) 10%,transparent);
+  box-shadow:0 10px 34px -12px rgba(0,0,0,.45), 0 2px 8px -4px rgba(0,0,0,.3),
+             inset 0 1px 0 color-mix(in srgb,#fff 22%,transparent)}
+/* Browsers without backdrop-filter get a solid island rather than a
+   see-through one with unreadable labels. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+  .tabbar{background:color-mix(in srgb,var(--bg) 97%,transparent)}
+}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:20px;
   color:var(--muted-2);font-family:var(--cond);font-weight:600;font-size:10px;letter-spacing:1px;
-  text-transform:uppercase;position:relative;transition:color .15s}
-.tab.active{color:var(--text)}
+  text-transform:uppercase;position:relative;transition:color .18s,background .18s}
+/* The active tab is its own little pill inside the island. */
+.tab.active{color:var(--text);background:color-mix(in srgb,var(--text) 7%,transparent)}
 .tab.active svg{color:var(--brand)}
+.tab:active{transform:scale(.97)}
 .tab-badge{position:absolute;top:2px;right:50%;margin-right:-22px;min-width:17px;height:17px;border-radius:99px;
   background:var(--red);color:var(--on-red);font-size:10px;font-family:var(--sans);font-weight:700;display:grid;place-items:center;padding:0 4px}
 
