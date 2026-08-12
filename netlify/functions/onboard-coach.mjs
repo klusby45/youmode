@@ -43,7 +43,10 @@ Stakes (suggested_stake) depend entirely on the format, because a stake is somet
 - ACCOUNTABILITY (partners): what one owes the other if they slip, supportive not cutthroat. E.g. "miss a day, you cover their coffee".
 - COMMUNITY: a group-wide stake for the whole crew. E.g. "last place buys the round" or "everyone who misses chips in for a group dinner".
 
-When you have enough, call propose_challenge with a complete challenge, and in your text reply give one warm sentence describing its shape and invite them to tweak anything. Keep names short and human. Never call the tool until every required field can be filled sensibly.`
+DO NOT BUILD UNTIL THEY ARE READY. Calling the tool ends the conversation and moves them to a review screen, so doing it while they are still talking takes the pen out of their hand mid-sentence.
+- If their latest message adds anything new (a constraint, a health detail, a change of mind, "one more thing"), you ACKNOWLEDGE it specifically in your reply, say how it changes the plan, and ask if there is anything else. No tool call that turn. Someone who just told you something important is waiting to be heard, not built for.
+- Only call propose_challenge once they have signalled they are done: "build it", "that's everything", "sounds good", "yes", or a clear answer to your "anything else?".
+- When you do call it, your text reply must still name what you heard, in one warm sentence, and invite them to tweak anything. Keep names short and human. Never call the tool until every required field can be filled sensibly.`
 
 const TOOL = {
   name: 'propose_challenge',
@@ -263,46 +266,103 @@ export default async (req) => {
           try {
             // The heartbeat above keeps the GATEWAY happy, but the function
             // itself is killed a little past 30 seconds and no amount of
-            // newlines changes that. A 22 minute ramble measured 27.4s, which
-            // is one long answer away from being cut off holding nothing, so
-            // the work is bounded rather than hoped about.
+            // newlines changes that. A 22 minute ramble measured 27.4s.
+            //
+            // So the reply STREAMS. Not for the gateway, for salvage: if the
+            // clock runs out we still hold every word written so far, and a
+            // partial answer that engages with what they just said beats a
+            // finished answer they never see.
+            //
+            // Deliberately NOT doing what a first attempt did here, which was
+            // give up on the conversation and force a plan. Someone who just
+            // added something important is not asking to be built for; they
+            // are waiting to be heard. Long, complicated conversations are the
+            // entire point of this screen.
             const ctl = new AbortController()
-            const deadline = setTimeout(() => ctl.abort(), 24000)
-            const aRes = await fetch('https://api.anthropic.com/v1/messages', {
-              method: 'POST',
-              signal: ctl.signal,
-              headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
-              body: JSON.stringify({
-                model: 'claude-sonnet-5',
-                // A deep ramble can spend tokens reasoning before the visible
-                // reply and the tool JSON, and 1500 once exhausted silently.
-                // But 4000 is room to write an essay nobody asked for, and
-                // every one of those tokens is time against the 30s wall. A
-                // short reply plus a twelve item proposal fits here twice over.
-                max_tokens: 2000,
-                system: `${SYSTEM}\n\nToday's date: ${today}.`,
-                tools: [TOOL],
-                messages: clean,
-              }),
-            })
-            clearTimeout(deadline)
-            if (!aRes.ok) {
-              console.error('anthropic error', aRes.status, (await aRes.text()).slice(0, 300))
-              return send({ reply: "I'm having trouble thinking right now. Try again in a minute.", proposal: null })
+            const deadline = setTimeout(() => ctl.abort(), 26000)
+            let text = ''
+            let toolJson = ''
+            let inTool = false
+            let stopReason = null
+            let httpErr = null
+            try {
+              const aRes = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                signal: ctl.signal,
+                headers: { 'x-api-key': ANTHROPIC, 'anthropic-version': '2023-06-01', ...JSON_HEADERS },
+                body: JSON.stringify({
+                  model: 'claude-sonnet-5',
+                  stream: true,
+                  // Enough for a reply plus a twelve item proposal, twice over.
+                  // Every token past that is time spent against the 30s wall.
+                  max_tokens: 2000,
+                  system: `${SYSTEM}\n\nToday's date: ${today}.`,
+                  tools: [TOOL],
+                  messages: clean,
+                }),
+              })
+              if (!aRes.ok) {
+                httpErr = `${aRes.status} ${(await aRes.text().catch(() => '')).slice(0, 200)}`
+              } else {
+                const reader = aRes.body.getReader()
+                const dec = new TextDecoder()
+                let buf = ''
+                for (;;) {
+                  const { done, value } = await reader.read()
+                  if (done) break
+                  buf += dec.decode(value, { stream: true })
+                  const lines = buf.split('\n')
+                  buf = lines.pop() || ''
+                  for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue
+                    try {
+                      const ev = JSON.parse(line.slice(6))
+                      if (ev.type === 'content_block_start') inTool = ev.content_block?.type === 'tool_use'
+                      if (ev.type === 'content_block_stop') inTool = false
+                      if (ev.type === 'content_block_delta') {
+                        if (ev.delta?.type === 'text_delta') text += ev.delta.text
+                        if (ev.delta?.type === 'input_json_delta') toolJson += ev.delta.partial_json || ''
+                      }
+                      if (ev.type === 'message_delta' && ev.delta?.stop_reason) stopReason = ev.delta.stop_reason
+                    } catch { /* keepalive or split frame */ }
+                  }
+                }
+              }
+            } catch (e) {
+              if (!/abort/i.test(e?.name || '') && !/abort/i.test(e?.message || '')) throw e
+              stopReason = 'cut_short'
+              console.error('onboard-coach: hit 26s, returning what was written')
+            } finally {
+              clearTimeout(deadline)
             }
-            const ai = await aRes.json()
-            if (ai.stop_reason === 'refusal') {
+
+            if (httpErr) {
+              console.error('anthropic error', httpErr)
+              return send({ reply: "I'm having trouble thinking right now. Try again in a minute.", proposal: null, retryable: true })
+            }
+            if (stopReason === 'refusal') {
               return send({ reply: "I can't help build that one. Tell me a habit or goal you want to stay accountable to and I'll set it up.", proposal: null })
             }
-            const reply = (ai.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim()
-            const toolUse = (ai.content || []).find((b) => b.type === 'tool_use' && b.name === 'propose_challenge')
-            const proposal = toolUse ? validateProposal(toolUse.input, today) : null
 
-            // Never go silent: no text + no tool call (e.g. the whole budget
-            // went to reasoning) still gets a human, actionable reply.
+            let proposal = null
+            if (toolJson) {
+              try { proposal = validateProposal(JSON.parse(toolJson), today) } catch { /* clipped mid-JSON */ }
+            }
+            // A sentence cut in half reads as a glitch; drop back to the last
+            // finished one so a salvaged reply still sounds like a person.
+            let reply = text.trim()
+            if (stopReason === 'cut_short' && reply) {
+              const cut = Math.max(reply.lastIndexOf('. '), reply.lastIndexOf('? '), reply.lastIndexOf('! '))
+              if (cut > 40) reply = reply.slice(0, cut + 1)
+            }
+
             if (!reply && !proposal) {
-              console.error('empty response', ai.stop_reason, JSON.stringify(ai.usage || {}))
-              return send({ reply: "Got all of that — what a picture. Say \"build it\" and I'll turn it into your challenge.", proposal: null })
+              console.error('empty response', stopReason)
+              return send({
+                reply: "I heard all of that but ran out of time putting an answer together. Nothing is lost, tap Try again.",
+                proposal: null,
+                retryable: true,
+              })
             }
 
             send({
@@ -310,15 +370,8 @@ export default async (req) => {
               proposal,
             })
           } catch (e) {
-            if (/abort/i.test(e?.name || '') || /abort/i.test(e?.message || '')) {
-              console.error('onboard-coach: hit the 24s deadline')
-              return send({
-                reply: "That was a lot to take in and I ran out of time on it. Nothing is lost. Tap send again and I'll build it.",
-                proposal: null,
-              })
-            }
             console.error('onboard-coach stream error', String(e?.message || e))
-            send({ reply: 'Something went sideways. Try again.', proposal: null })
+            send({ reply: 'Something went sideways. Try again.', proposal: null, retryable: true })
           }
         })()
       },

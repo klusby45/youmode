@@ -78,6 +78,9 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
 
   // voice capture
   const [recState, setRecState] = useState('idle') // idle | recording | transcribing
+  // A turn that failed leaves the composer empty, so "send again" is advice the
+  // screen cannot take. This is the button that actually does it.
+  const [canRetry, setCanRetry] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [micDenied, setMicDenied] = useState(false)
   const recRef = useRef(null)
@@ -195,9 +198,10 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
   }
 
   async function runCoach(next) {
-    setBusy(true); setErr(null)
+    setBusy(true); setErr(null); setCanRetry(false)
     try {
-      const { reply, proposal } = await api.onboardChat(next)
+      const { reply, proposal, retryable } = await api.onboardChat(next)
+      if (retryable) setCanRetry(true)
       // Show something no matter what — a silent turn strands the user in a
       // dead chat (Mayssa, 2026-07-17: model spent its whole budget reasoning,
       // returned nothing, and the UI just sat there).
@@ -208,6 +212,7 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
       if (usable) { seedFromProposal(proposal); setStep('review') }
     } catch {
       setErr("Couldn't reach the setup guide. Check your connection and try again.")
+      setCanRetry(true)
     } finally {
       setBusy(false)
     }
@@ -529,6 +534,10 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
               <button className="btn btn-accent oc-send" disabled={busy || !input.trim() || recState !== 'idle'} onClick={send} aria-label="Send"><Icon name="chevron" size={18} /></button>
             </div>
+            {canRetry && !busy && (
+              <button className="btn btn-accent" style={{ width: '100%', marginBottom: 10 }}
+                onClick={() => runCoach(msgs)}>Try again</button>
+            )}
             {recState !== 'idle' && (
               <div className="oc-rec-line">
                 {recState === 'recording' ? <>Listening · {mmss} · tap the square when you're done</> : 'Writing it down…'}
