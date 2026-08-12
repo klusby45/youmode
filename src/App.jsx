@@ -1512,6 +1512,11 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   .oc-aura.live i{transform:translate(-50%,-50%) scale(1);opacity:.7;transition:none}}
 .oc-timer{font-family:var(--cond);font-weight:600;font-size:16px;letter-spacing:1px;color:var(--sun-text)}
 .oc-cancel{background:none;border:none;color:var(--sun-muted);font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.oc-back-chat{display:inline-flex;align-items:center;gap:5px;background:none;border:none;padding:0 0 10px;
+  color:var(--lpc-mut);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.sun-scope .oc-back-chat{color:var(--sun-muted)}
+.fmt-chip small{display:block;width:100%;margin-top:3px;font-size:11px;line-height:1.35;opacity:.72;
+  font-weight:400;letter-spacing:0;text-transform:none}
 /* Onboarding chat step: fills the screen, one scroller, composer pinned. */
 .onb-wrap.oc-chat{display:flex;flex-direction:column;min-height:0;overflow:hidden;
   padding-bottom:calc(10px + env(safe-area-inset-bottom))}
@@ -1571,10 +1576,12 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .onb-choice .card:hover{border-color:var(--line-2)}
 .onb-title{font-family:var(--cond);font-weight:700;font-size:19px;letter-spacing:.5px;display:flex;align-items:center;gap:10px}
 .onb-sub{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.45}
-.fmt-picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:2px}
-.fmt-chip{display:flex;align-items:center;gap:8px;padding:12px;border-radius:12px;background:var(--panel);
-  border:1px solid var(--line);color:var(--muted);font-family:var(--cond);font-weight:600;font-size:14px;
-  letter-spacing:.5px}
+/* One per row: these carry a line of explanation now, and "Versus" next to
+   "Partners" in a cramped two-up told a new user nothing. */
+.fmt-picker{display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:2px}
+.fmt-chip{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:12px 14px;border-radius:12px;
+  background:var(--panel);border:1px solid var(--line);color:var(--muted);font-family:var(--cond);
+  font-weight:600;font-size:14px;letter-spacing:.5px;text-align:left}
 .fmt-chip.active{border-color:var(--brand);color:var(--text);background:var(--panel-2)}
 .fmt-chip.active svg{color:var(--brand)}
 .builder-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);

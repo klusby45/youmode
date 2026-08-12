@@ -80,7 +80,11 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
   const [recState, setRecState] = useState('idle') // idle | recording | transcribing
   // A turn that failed leaves the composer empty, so "send again" is advice the
   // screen cannot take. This is the button that actually does it.
-  const [canRetry, setCanRetry] = useState(false)
+  //
+  // It has to survive a relaunch. This is a web app on a home screen: there is
+  // no address bar, no reload button, and the only way back in is to kill it
+  // and tap the icon. A retry offer that evaporates on the way is no offer.
+  const [canRetry, setCanRetry] = useState(!!saved?.canRetry)
   const [elapsed, setElapsed] = useState(0)
   const [micDenied, setMicDenied] = useState(false)
   const recRef = useRef(null)
@@ -137,10 +141,10 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
   // Keep the in-progress session on disk (cleared when the challenge is created).
   useEffect(() => {
     try {
-      if (msgs.length || input.trim()) localStorage.setItem(persistKey, JSON.stringify({ msgs, input }))
+      if (msgs.length || input.trim()) localStorage.setItem(persistKey, JSON.stringify({ msgs, input, canRetry }))
       else localStorage.removeItem(persistKey)
     } catch { /* private mode */ }
-  }, [msgs, input, persistKey])
+  }, [msgs, input, canRetry, persistKey])
 
   // Self-healing chat: if the conversation is sitting on an unanswered user
   // message (a restored session, or a turn that failed), trigger the coach
@@ -196,6 +200,15 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
       timesPerDay: it.kind === 'check' && Number(it.timesPerDay) > 1 ? Math.min(6, Math.round(Number(it.timesPerDay))) : null,
     })))
   }
+
+  // The coach owes a reply when the last word was theirs, or when the last
+  // thing it said was one of its own apologies. The second case matters for
+  // anyone already stranded before the flag was being saved: their transcript
+  // is the only evidence left that a turn was lost.
+  const STUCK_RE = /ran out of time|nothing is lost|tap send again|tap try again|having trouble thinking|went sideways|couldn't reach/i
+  const lastMsg = msgs[msgs.length - 1]
+  const owedReply = lastMsg?.role === 'user'
+    || (lastMsg?.role === 'assistant' && STUCK_RE.test(lastMsg.content || ''))
 
   async function runCoach(next) {
     setBusy(true); setErr(null); setCanRetry(false)
@@ -534,7 +547,7 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
               <button className="btn btn-accent oc-send" disabled={busy || !input.trim() || recState !== 'idle'} onClick={send} aria-label="Send"><Icon name="chevron" size={18} /></button>
             </div>
-            {canRetry && !busy && (
+            {(canRetry || owedReply) && !busy && (
               <button className="btn btn-accent" style={{ width: '100%', marginBottom: 10 }}
                 onClick={() => runCoach(msgs)}>Try again</button>
             )}
@@ -549,8 +562,17 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
 
         {step === 'review' && (
           <>
+            {/* Miska got moved here mid-sentence and had no way back. A draft
+                is not the end of a conversation, and nothing is created until
+                she says so, so the door stays open. */}
+            {msgs.length > 0 && (
+              <button className="oc-back-chat" onClick={() => setStep('interview')}>
+                <Icon name="chevron" size={14} style={{ transform: 'rotate(180deg)' }} />
+                Back to the chat
+              </button>
+            )}
             <div className="screen-title">Here's your challenge.</div>
-            <p className="muted onb-sub-lg">Built from what you told me. Tweak anything, then create it.</p>
+            <p className="muted onb-sub-lg">A draft from what you told me. Change anything, go back and keep talking, or create it when it's right.</p>
 
             <div className="field" style={{ marginTop: 14 }}>
               <label>Name</label>
@@ -585,6 +607,9 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
               {FORMATS.map((f) => (
                 <button key={f.key} type="button" className={'fmt-chip' + (format === f.key ? ' active' : '')} onClick={() => setFormat(f.key)}>
                   <Icon name={f.icon} size={18} /><span>{f.label}</span>
+                  {/* "Versus" and "Partners" mean nothing on day one. The
+                      blurbs already existed, they were just never shown. */}
+                  <small>{f.blurb}</small>
                 </button>
               ))}
             </div>
