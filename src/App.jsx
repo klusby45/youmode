@@ -194,8 +194,13 @@ export default function App() {
     // The day belongs to the person living it, not to the challenge's home
     // city. Someone running theirs from Paris is on Paris time, and someone
     // who goes to bed at 1am gets a boundary that is after they do.
-    const tz = me.timezone || c.timezone
-    const endHour = me.dayEndHour || 0
+    // bundle.profile, not `me`: that const is declared further down this
+    // component and useMemo runs during render, so reaching for it here threw
+    // "cannot access before initialization" and took the whole app to a blank
+    // screen. Same object, available now.
+    const prof = bundle?.profile
+    const tz = prof?.timezone || c.timezone
+    const endHour = prof?.dayEndHour || 0
     return {
       startStr: c.startDate,
       todayStr: todayInTz(tz, endHour),
@@ -207,7 +212,7 @@ export default function App() {
       format: c.format || deriveFormat(parts),
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, nowTick, me.timezone, me.dayEndHour]) // nowTick keeps todayStr honest across the rollover
+  }, [active, nowTick, bundle?.profile?.timezone, bundle?.profile?.dayEndHour]) // nowTick keeps todayStr honest across the rollover
 
   // Member accents remap per colorway (identity on Midnight) — one mapping
   // point re-themes every inline style + SVG downstream.
