@@ -683,8 +683,11 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
               </div>
             )}
             <button className="btn btn-accent btn-block" style={{ marginTop: 8 }} disabled={busy} onClick={doCreate}>{busy ? 'Creating…' : err ? 'Try again' : 'Create my challenge'}</button>
+            {/* Says where, not "nothing is final". This is an accountability
+                app: telling someone their commitment is provisional at the
+                moment they make it argues against the whole premise (Kyle). */}
             <p className="center muted" style={{ fontSize: 12, marginTop: 10 }}>
-              Nothing here is final. You can change all of it later from your settings.
+              You can edit your challenge anytime in your settings.
             </p>
             {/* Same action as the link at the top of this screen: go back to
                 the chat. It said "Keep tweaking with the guide", which named
