@@ -139,9 +139,14 @@ export default function EditChecklistSheet({ reqs, onSave, onClose }) {
       </button>
 
       {err && <div className="login-err">{err}</div>}
-      <button className="btn btn-accent btn-block" style={{ marginTop: 14 }} disabled={busy} onClick={save}>
+      {/* Pinned to the bottom of the sheet. Editing one line near the top and
+          then scrolling past a dozen items to reach Save is a long way to go
+          to change a word (Miska). */}
+      <div className="save-dock">
+      <button className="btn btn-accent btn-block" disabled={busy} onClick={save}>
         {busy ? 'Saving…' : 'Save my checklist'}
       </button>
+      </div>
       <button className="auth-flip" onClick={onClose}>Cancel</button>
     </Sheet>
   )

@@ -468,6 +468,7 @@ export default function App() {
           {activeView === 'judge' && <JudgeQueue />}
         </main>
 
+        <div className="tabbar-fade" aria-hidden="true" />
         <nav className="tabbar">
           {tabs.map(([key, icon, label]) => (
             <button key={key} className={'tab' + (activeView === key ? ' active' : '')} onClick={() => setView(key)}>
@@ -1055,6 +1056,12 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .grp-chip.on{border-color:var(--blue);color:var(--text);background:color-mix(in srgb,var(--blue) 12%,transparent)}
 .grp-chip .gc-box{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--line-2);display:grid;place-items:center;flex:none}
 .grp-chip.on .gc-box{background:var(--blue);border-color:var(--blue);color:#fff}
+/* Save stays reachable while editing a long checklist. */
+.save-dock{position:sticky;bottom:0;z-index:5;margin:14px -18px -18px;padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+  background:linear-gradient(to bottom,transparent,color-mix(in srgb,var(--panel) 88%,transparent) 30%,var(--panel) 60%)}
+/* A preview note reads as a note, not another checkbox. */
+.noteline.preview{pointer-events:none}
+.nl-ghost{display:flex;align-items:center;color:var(--muted-2);font-size:14px}
 /* A note written in place: the question, last time's answer, one line. */
 .noteline{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
 .noteline.done{background:var(--panel-2)}
@@ -1089,7 +1096,8 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .br-due-say{font-weight:600;color:var(--text)}
 .br-due-x{background:none;border:none;color:var(--muted-2);cursor:pointer;display:flex;padding:2px}
 /* Today: a deadline on the tile, and the mark when it slipped. */
-.slot-due{position:absolute;left:10px;top:10px;z-index:4}
+/* Top-RIGHT: the kind icon already owns the top-left corner. */
+.slot-due{position:absolute;right:10px;top:10px;z-index:4}
 .due-pill{display:inline-flex;align-items:center;gap:3px;font-size:10px;letter-spacing:.05em;
   text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 7px}
 .due-pill.late{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 45%,transparent)}
@@ -1276,30 +1284,51 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   font-family:var(--cond);letter-spacing:1px;text-transform:uppercase;color:var(--on-scrim-muted);font-size:11px;pointer-events:none}
 
 /* tabbar */
-/* Floating glass island. Detached from the edges so the content scrolls
-   under it, frosted rather than opaque so the page still reads through, and
-   an inner top highlight plus a hairline border to keep the edge crisp on
-   both the cream and the near-black themes. */
+/* A soft fade behind and below the island, so content dissolves into the
+   bottom edge instead of sliding under a translucent bar at full strength
+   and reappearing in the gap beneath it (Miska). */
+.tabbar-fade{position:fixed;left:0;right:0;bottom:0;height:calc(112px + env(safe-area-inset-bottom));
+  z-index:39;pointer-events:none;
+  background:linear-gradient(to bottom,transparent,color-mix(in srgb,var(--bg) 70%,transparent) 46%,var(--bg) 82%)}
+/* Floating glass island, liquid-glass pass.
+   Real refraction is not available in CSS, so the lens is built from three
+   things a browser can actually do: a heavier blur with the saturation and
+   brightness lifted so colour blooms through rather than greying out; a
+   thinner, more transparent body so it reads as glass and not as paint; and a
+   specular edge, bright along the top where light would catch a curve and
+   dark along the bottom where it would fall away. The shadow comes right down:
+   a heavy drop shadow makes an object look stuck ON the screen, and the point
+   of this is to look like part of it. */
 .tabbar{position:fixed;left:14px;right:14px;z-index:40;max-width:412px;
   margin:0 auto;bottom:calc(12px + env(safe-area-inset-bottom));
-  display:flex;gap:2px;padding:7px;border-radius:26px;
-  background:color-mix(in srgb,var(--bg) 72%,transparent);
-  -webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
-  border:1px solid color-mix(in srgb,var(--text) 10%,transparent);
-  box-shadow:0 10px 34px -12px rgba(0,0,0,.45), 0 2px 8px -4px rgba(0,0,0,.3),
-             inset 0 1px 0 color-mix(in srgb,#fff 22%,transparent)}
-/* Browsers without backdrop-filter get a solid island rather than a
-   see-through one with unreadable labels. */
+  display:flex;gap:2px;padding:7px;border-radius:28px;isolation:isolate;
+  background:color-mix(in srgb,var(--bg) 52%,transparent);
+  -webkit-backdrop-filter:blur(30px) saturate(200%) brightness(1.06);
+  backdrop-filter:blur(30px) saturate(200%) brightness(1.06);
+  border:1px solid color-mix(in srgb,var(--text) 7%,transparent);
+  box-shadow:0 6px 18px -10px rgba(0,0,0,.28),
+             inset 0 1px 0 color-mix(in srgb,#fff 34%,transparent),
+             inset 0 -1px 0 color-mix(in srgb,#000 7%,transparent)}
+/* The sheen: light gathering along the top curve and thinning out. This is
+   what sells the edge as rounded rather than cut. */
+.tabbar::before{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
+  background:linear-gradient(to bottom,
+    color-mix(in srgb,#fff 16%,transparent),
+    transparent 42%,
+    color-mix(in srgb,#000 5%,transparent))}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
   .tabbar{background:color-mix(in srgb,var(--bg) 97%,transparent)}
 }
-.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:20px;
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:22px;
   color:var(--muted-2);font-family:var(--cond);font-weight:600;font-size:10px;letter-spacing:1px;
-  text-transform:uppercase;position:relative;transition:color .18s,background .18s}
-/* The active tab is its own little pill inside the island. */
-.tab.active{color:var(--text);background:color-mix(in srgb,var(--text) 7%,transparent)}
+  text-transform:uppercase;position:relative;transition:color .18s,background .18s,transform .12s}
+/* The selected tab is its own smaller lens sitting in the larger one. */
+.tab.active{color:var(--text);
+  background:color-mix(in srgb,var(--text) 6%,transparent);
+  box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 26%,transparent),
+             0 1px 3px -2px rgba(0,0,0,.25)}
 .tab.active svg{color:var(--brand)}
-.tab:active{transform:scale(.97)}
+.tab:active{transform:scale(.96)}
 .tab-badge{position:absolute;top:2px;right:50%;margin-right:-22px;min-width:17px;height:17px;border-radius:99px;
   background:var(--red);color:var(--on-red);font-size:10px;font-family:var(--sans);font-weight:700;display:grid;place-items:center;padding:0 4px}
 

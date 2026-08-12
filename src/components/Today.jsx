@@ -272,7 +272,17 @@ export default function Today() {
                   </div>
                 ))}
               </div>
-              {peekCadence.filter((r) => r.kind !== 'photo').map((r) => (
+              {peekCadence.filter((r) => r.kind === 'note').map((r) => (
+                <div key={r.id} className="noteline preview">
+                  <div className="nl-head">
+                    <span className="nl-box"><Icon name="edit" size={13} /></span>
+                    <span className="nl-title">{r.label}</span>
+                  </div>
+                  {r.hint && <div className="nl-q">{r.hint}</div>}
+                  <div className="nl-row"><span className="nl-in fr-input nl-ghost">Type your answer here</span></div>
+                </div>
+              ))}
+              {peekCadence.filter((r) => r.kind !== 'photo' && r.kind !== 'note').map((r) => (
                 <div key={r.id} className="watertoggle preview" style={{ marginBottom: 8 }}>
                   <span className="wt-box wt-count-box">0/{r.timesPerWeek || r.timesPerMonth || 1}</span>
                   <span style={{ flex: 1 }}>
@@ -285,12 +295,13 @@ export default function Today() {
             </>
           )}
           {peekNotes.map((r) => (
-            <div key={r.id} className="watertoggle preview" style={{ marginBottom: 8 }}>
-              <span className="wt-box"><Icon name="edit" size={16} /></span>
-              <span style={{ flex: 1 }}>
-                <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
-                <span className="wt-hint">{r.hint || 'Write a few words about it'}</span>
-              </span>
+            <div key={r.id} className="noteline preview">
+              <div className="nl-head">
+                <span className="nl-box"><Icon name="edit" size={13} /></span>
+                <span className="nl-title">{r.label}</span>
+              </div>
+              {r.hint && <div className="nl-q">{r.hint}</div>}
+              <div className="nl-row"><span className="nl-in fr-input nl-ghost">Type your answer here</span></div>
             </div>
           ))}
         </div>
@@ -540,10 +551,52 @@ export default function Today() {
           <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
             These show every day until you have completed them.
           </p>
-          {weekly.map((r) => {
+          {/* Grouping works here too. Her two parent calls are weekly, and a
+              group that only worked on daily items was a group that did not
+              work (Miska). */}
+          {[...new Set(weekly.filter((r) => r.kind === 'check' && groupOf(r)).map(groupOf))]
+            .filter((g) => weekly.filter((r) => groupOf(r) === g).length > 1)
+            .map((g) => {
+              const items = weekly.filter((r) => groupOf(r) === g)
+              const met = items.filter((r) => (wprog[r.id] || {}).met).length
+              return (
+                <div key={g} className="grp">
+                  <div className="grp-head">
+                    <span className="grp-name">{g}</span>
+                    <span className={'grp-count' + (met === items.length ? ' met' : '')}>{met} of {items.length} done</span>
+                  </div>
+                  <div className="grp-items">
+                    {items.map((r) => {
+                      const wp = wprog[r.id] || { done: 0, target: r.timesPerWeek || 1, met: false }
+                      const onToday = entrySatisfies(r, log?.entriesByReq?.[r.id])
+                      return (
+                        <button key={r.id} className={'grp-chip' + (onToday ? ' on' : '') + (wp.met ? ' met' : '')}
+                          disabled={!editable || saving === r.id} onClick={() => toggleCheck(r)}>
+                          <span className="gc-box">{onToday && <Icon name="check" size={11} strokeWidth={3} />}</span>
+                          {r.label} <small>{wp.done}/{wp.target}</small>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          {weekly.filter((r) => {
+            const g = groupOf(r)
+            return !(r.kind === 'check' && g && weekly.filter((x) => groupOf(x) === g).length > 1)
+          }).map((r) => {
             const wp = wprog[r.id] || { done: 0, target: r.timesPerWeek || 1, met: false }
             const onToday = entrySatisfies(r, log?.entriesByReq?.[r.id])
             const badge = `${wp.done} of ${wp.target} this week`
+            // A weekly note is still a note. It was rendering as a checkbox
+            // row here, which is exactly the confusion the kind exists to
+            // avoid (Miska).
+            if (r.kind === 'note') {
+              return (
+                <NoteLine key={r.id} req={r} entry={log?.entriesByReq?.[r.id]} cfg={cfg} editable={editable}
+                  badge={badge} previous={prevNote(r.id)} onSave={(text) => saveNoteFor(r, text)} />
+              )
+            }
             if (r.kind !== 'photo') {
               const busy = saving === r.id
               return (
@@ -947,7 +1000,7 @@ function MacroRow({ label, value, unit, target, max, ceiling }) {
 // lot of ceremony for one line (Miska): type it, save it, done. Your last
 // answer sits above the box, because writing against your own record is the
 // part a checkbox cannot do.
-export function NoteLine({ req, entry, cfg, editable, previous, onSave }) {
+export function NoteLine({ req, entry, cfg, editable, previous, badge, onSave }) {
   const saved = (entry?.caption || '').trim()
   const [text, setText] = useState(saved)
   const [busy, setBusy] = useState(false)
@@ -968,6 +1021,7 @@ export function NoteLine({ req, entry, cfg, editable, previous, onSave }) {
       <div className="nl-head">
         <span className="nl-box">{done ? <Icon name="check" size={14} strokeWidth={3} /> : <Icon name="edit" size={13} />}</span>
         <span className="nl-title">{req.label}</span>
+        {badge && <span className="grp-count">{badge}</span>}
         <DueBadge req={req} entry={entry} cfg={cfg} />
       </div>
       {req.hint && <div className="nl-q">{req.hint}</div>}

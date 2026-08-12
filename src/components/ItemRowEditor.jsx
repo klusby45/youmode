@@ -22,6 +22,9 @@ function GrowText({ className, value, placeholder, ariaLabel, onChange }) {
 }
 
 // Minutes-after-midnight <-> the "HH:MM" a time input speaks.
+// Items whose proof is a night: they get a bedtime AND a wake time.
+const SLEEPY = /\b(sleep|asleep|bed|bedtime|lights out|wake|wake-up|woke)\b/i
+
 const toClock = (m) => (m == null ? '' : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`)
 const fromClock = (v) => {
   const [h, m] = String(v || '').split(':').map(Number)
@@ -85,11 +88,8 @@ export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMove
       {/* Four supplements as four tiles is a lot of screen for four taps.
           Items sharing a group name collapse into one (Miska). */}
       {/* Picking beats spelling. Typing the group name on every item meant
-          one typo made a second group of one (Miska). Only offered on checks:
-          grouping collapses items into chips, which is the wrong shape for a
-          photo tile, and offering it there would promise something that does
-          not happen. */}
-      {it.kind === 'check' && (
+          one typo made a second group of one (Miska). Offered on every kind:
+          she wanted her two parent calls grouped, and they are weekly. */}
       <div className="br-group">
         <label>Group</label>
         <select className="br-group-in" value={it.group || ''}
@@ -104,9 +104,21 @@ export default function ItemRowEditor({ it, onChange, onRemove, onMoveUp, onMove
           <option value="__new">+ New group…</option>
         </select>
       </div>
-      )}
 
-      {it.frequency !== 'weekly' && it.frequency !== 'monthly' && (
+      {/* Two times, but only where a night has two ends. Read off the item's
+          own words so nothing has to be toggled: this used to be a "+ check
+          this against a sleep screenshot" button on every photo item, which
+          was noise on a morning walk (Miska). */}
+      {SLEEPY.test(`${it.label || ''} ${it.hint || ''}`) ? (
+        <div className="br-due br-sleep">
+          <label>Asleep by</label>
+          <input type="time" className="br-due-in" value={toClock(it.sleepBy ?? 60)}
+            onChange={(e) => onChange({ sleepBy: fromClock(e.target.value) })} />
+          <label>Up by</label>
+          <input type="time" className="br-due-in" value={toClock(it.wakeBy ?? 540)}
+            onChange={(e) => onChange({ wakeBy: fromClock(e.target.value) })} />
+        </div>
+      ) : it.frequency !== 'weekly' && it.frequency !== 'monthly' && (
         <div className="br-due">
           {it.dueBy == null ? (
             <button type="button" className="br-due-add" onClick={() => onChange({ dueBy: 720 })}>
