@@ -554,6 +554,33 @@ export default function Today() {
           {/* Grouping works here too. Her two parent calls are weekly, and a
               group that only worked on daily items was a group that did not
               work (Miska). */}
+          {/* Photo items group too: hers are two photo calls under "Family",
+              and a group that only worked for checks was not a group. Photos
+              keep their tiles, just gathered under one heading. */}
+          {[...new Set(weekly.filter((r) => r.kind === 'photo' && groupOf(r)).map(groupOf))]
+            .filter((g) => weekly.filter((r) => groupOf(r) === g).length > 1)
+            .map((g) => {
+              const items = weekly.filter((r) => groupOf(r) === g)
+              const met = items.filter((r) => (wprog[r.id] || {}).met).length
+              return (
+                <div key={g} className="grp">
+                  <div className="grp-head">
+                    <span className="grp-name">{g}</span>
+                    <span className={'grp-count' + (met === items.length ? ' met' : '')}>{met} of {items.length} done</span>
+                  </div>
+                  <div className="slots-grid">
+                    {items.map((r) => {
+                      const wp = wprog[r.id] || { done: 0, target: r.timesPerWeek || 1 }
+                      return (
+                        <PhotoSlot key={r.id} req={r} entry={log?.entriesByReq?.[r.id]} editable={editable}
+                          uploading={uploading === r.id} onPick={(f) => onPick(r, f)} onClear={() => onClearPhotos(r)}
+                          cfg={cfg} badge={`${wp.done}/${wp.target}`} />
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
           {[...new Set(weekly.filter((r) => r.kind === 'check' && groupOf(r)).map(groupOf))]
             .filter((g) => weekly.filter((r) => groupOf(r) === g).length > 1)
             .map((g) => {
@@ -583,7 +610,7 @@ export default function Today() {
             })}
           {weekly.filter((r) => {
             const g = groupOf(r)
-            return !(r.kind === 'check' && g && weekly.filter((x) => groupOf(x) === g).length > 1)
+            return !(g && weekly.filter((x) => groupOf(x) === g).length > 1)
           }).map((r) => {
             const wp = wprog[r.id] || { done: 0, target: r.timesPerWeek || 1, met: false }
             const onToday = entrySatisfies(r, log?.entriesByReq?.[r.id])
@@ -721,7 +748,7 @@ export function DueBadge({ req, entry, cfg }) {
   )
 }
 
-export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, mealMode, onCaption, cfg }) {
+export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, mealMode, onCaption, cfg, badge }) {
   const paths = entry?.photoPaths?.length ? entry.photoPaths : (entry?.photoPath ? [entry.photoPath] : [])
   const filled = paths.length > 0
   const flagged = entry?.aiFlag && !entry.aiDismissed
@@ -768,7 +795,7 @@ export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, me
           button in the corner of a tile people tap to look at their own photo
           is how a logged meal got thrown away. */}
       <span className="slot-label">{req.label}</span>
-      {cfg && <span className="slot-due"><DueBadge req={req} entry={entry} cfg={cfg} /></span>}
+      {cfg && <span className="slot-due">{badge ? <span className="due-pill">{badge}</span> : <DueBadge req={req} entry={entry} cfg={cfg} />}</span>}
       {showCap ? (
         <button className={'slot-cap' + (entry?.caption ? '' : ' empty')}
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCaption() }}>

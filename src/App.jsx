@@ -392,15 +392,9 @@ export default function App() {
               <span className="brand-name">{active.challenge.name}</span>
             </div>
           )}
-          {/* Nothing at all before day one: the Today screen already says
-              "starts in 3 days" in the place you actually look (Miska). */}
-          {dayNum >= 1 && (
-            <div className="daypill">
-              {dayNum > myDays ? <>COMPLETE</> : (
-                <><span className="daypill-k">DAY</span><span className="daypill-n">{dayNum}</span><span className="daypill-t">/ {myDays}</span></>
-              )}
-            </div>
-          )}
+          {/* No day counter up here. Today already puts it in the ring at
+              full size, and a metric nobody looks at is just crowding
+              (Dylan). The header is a name and a way out. */}
           <div className="top-right">
             {bundle.challenges.length > 1 && (
               <select className="chal-switch" value={active.challenge.id} onChange={(e) => switchChallenge(e.target.value)}>
@@ -471,9 +465,11 @@ export default function App() {
         <div className="tabbar-fade" aria-hidden="true" />
         <nav className="tabbar">
           {tabs.map(([key, icon, label]) => (
-            <button key={key} className={'tab' + (activeView === key ? ' active' : '')} onClick={() => setView(key)}>
-              <Icon name={icon} size={22} />
-              <span>{label}</span>
+            <button key={key} className={'tab' + (activeView === key ? ' active' : '')} onClick={() => setView(key)}
+              aria-label={label} aria-current={activeView === key ? 'page' : undefined}>
+              <Icon name={icon} size={23} />
+              {/* The label stays for screen readers; the icon is the UI. */}
+              <span className="tab-label">{label}</span>
               {key === 'judge' && <JudgeBadge />}
             </button>
           ))}
@@ -498,7 +494,7 @@ function JudgeBadge() {
 // ════════════════════════════════════════════════════════════════════════
 const THEME = `
 :root{
-  --bg:#08080b; --panel:#14141b; --panel-2:#1b1b24; --panel-3:#22222d;
+  --nav-tint:#fff; --nav-tint-o:12%; --bg:#08080b; --panel:#14141b; --panel-2:#1b1b24; --panel-3:#22222d;
   --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.16);
   --text:#f5f5f7; --muted:#8d8d99; --muted-2:#5f5f6b;
   --red:#FF3B30; --green:#30D158; --gold:#FFD60A; --amber:#FF9F0A; --blue:#0A84FF; --purple:#BF5AF2;
@@ -589,9 +585,8 @@ img{display:block;max-width:100%}
 
 /* topbar */
 .topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;
-  gap:10px;padding:14px 18px;padding-top:calc(14px + env(safe-area-inset-top));backdrop-filter:blur(16px);
-  background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 92%,transparent),color-mix(in srgb,var(--bg) 55%,transparent));
-  border-bottom:1px solid var(--line)}
+  gap:10px;padding:14px 18px 12px;padding-top:calc(14px + env(safe-area-inset-top));backdrop-filter:blur(16px);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 92%,transparent),color-mix(in srgb,var(--bg) 55%,transparent))}
 .brand{display:flex;align-items:center;gap:8px;min-width:0;max-width:46%}
 .brand::before{content:'';width:4px;height:20px;border-radius:2px;background:var(--brand);flex:none}
 .brand-name{font-family:var(--cond);font-weight:700;font-size:17px;letter-spacing:1px;text-transform:uppercase;
@@ -918,6 +913,7 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 /* Weekly-cadence items: the "This week" section (progress toward N/week) */
 .watertoggle.wk.met{border-color:color-mix(in srgb,var(--green) 45%,transparent);background:color-mix(in srgb,var(--green) 8%,transparent)}
 .wk-photo{margin-top:10px}
+.wk-photo{margin-bottom:8px}
 .wk-photo .slots-grid{margin-top:8px;grid-template-columns:1fr}
 .wk-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 2px}
 .wk-title{font-family:var(--cond);font-weight:600;font-size:15px;color:var(--text)}
@@ -1045,7 +1041,7 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .br-sleep label{white-space:nowrap}
 /* A group of small checks in one tile. */
 .wt-count-box{font-family:var(--num-font,var(--cond));font-size:11px;font-weight:700;color:var(--muted)}
-.grp{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
+.grp{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:8px 0}
 .grp-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .grp-name{font-weight:650;font-size:15px;flex:1}
 .grp-count{font-size:12px;color:var(--muted)}
@@ -1057,8 +1053,14 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .grp-chip .gc-box{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--line-2);display:grid;place-items:center;flex:none}
 .grp-chip.on .gc-box{background:var(--blue);border-color:var(--blue);color:#fff}
 /* Save stays reachable while editing a long checklist. */
-.save-dock{position:sticky;bottom:0;z-index:5;margin:14px -18px -18px;padding:12px 18px calc(12px + env(safe-area-inset-bottom));
-  background:linear-gradient(to bottom,transparent,color-mix(in srgb,var(--panel) 88%,transparent) 30%,var(--panel) 60%)}
+.save-dock{position:sticky;bottom:0;z-index:5;
+  /* The sheet carries 16px sides and 30px + safe-area at the bottom. The dock
+     cancels both with negative margins and re-adds them as its own padding,
+     so it sits flush on the bottom edge instead of floating an inch above it
+     with the list visible underneath. */
+  margin:14px -16px calc(-30px - env(safe-area-inset-bottom));
+  padding:12px 16px calc(18px + env(safe-area-inset-bottom));
+  background:linear-gradient(to bottom,transparent,color-mix(in srgb,var(--panel) 92%,transparent) 26%,var(--panel) 56%)}
 /* A preview note reads as a note, not another checkbox. */
 .noteline.preview{pointer-events:none}
 .nl-ghost{display:flex;align-items:center;color:var(--muted-2);font-size:14px}
@@ -1291,44 +1293,46 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   z-index:39;pointer-events:none;
   background:linear-gradient(to bottom,transparent,color-mix(in srgb,var(--bg) 70%,transparent) 46%,var(--bg) 82%)}
 /* Floating glass island, liquid-glass pass.
-   Real refraction is not available in CSS, so the lens is built from three
-   things a browser can actually do: a heavier blur with the saturation and
-   brightness lifted so colour blooms through rather than greying out; a
-   thinner, more transparent body so it reads as glass and not as paint; and a
-   specular edge, bright along the top where light would catch a curve and
-   dark along the bottom where it would fall away. The shadow comes right down:
-   a heavy drop shadow makes an object look stuck ON the screen, and the point
-   of this is to look like part of it. */
+   Real refraction is not a thing CSS can do, so the lens is three things a
+   browser can: a heavy blur with saturation and brightness lifted so colour
+   blooms through rather than greying out, a thin body so it reads as glass
+   and not as paint, and a specular edge, bright along the top where light
+   would catch a curve and dark along the bottom where it falls away.
+   Contrast comes from the FILL, not from a drop shadow: a shadow makes a
+   thing look stuck on the screen, a darker fill makes it look like glass over
+   what is behind it (Dylan). Fully round, not squircle. */
 .tabbar{position:fixed;left:14px;right:14px;z-index:40;max-width:412px;
-  margin:0 auto;bottom:calc(12px + env(safe-area-inset-bottom));
-  display:flex;gap:2px;padding:7px;border-radius:28px;isolation:isolate;
-  background:color-mix(in srgb,var(--bg) 52%,transparent);
-  -webkit-backdrop-filter:blur(30px) saturate(200%) brightness(1.06);
-  backdrop-filter:blur(30px) saturate(200%) brightness(1.06);
-  border:1px solid color-mix(in srgb,var(--text) 7%,transparent);
-  box-shadow:0 6px 18px -10px rgba(0,0,0,.28),
-             inset 0 1px 0 color-mix(in srgb,#fff 34%,transparent),
-             inset 0 -1px 0 color-mix(in srgb,#000 7%,transparent)}
-/* The sheen: light gathering along the top curve and thinning out. This is
-   what sells the edge as rounded rather than cut. */
+  margin:0 auto;bottom:calc(14px + env(safe-area-inset-bottom));
+  display:flex;gap:2px;padding:6px;border-radius:999px;isolation:isolate;
+  background:color-mix(in srgb,var(--nav-tint,#000) var(--nav-tint-o,14%),transparent);
+  -webkit-backdrop-filter:blur(30px) saturate(190%);backdrop-filter:blur(30px) saturate(190%);
+  border:1px solid color-mix(in srgb,var(--text) 8%,transparent);
+  box-shadow:0 2px 10px -8px rgba(0,0,0,.22),
+             inset 0 1px 0 color-mix(in srgb,#fff 30%,transparent),
+             inset 0 -1px 0 color-mix(in srgb,#000 8%,transparent)}
 .tabbar::before{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
   background:linear-gradient(to bottom,
-    color-mix(in srgb,#fff 16%,transparent),
-    transparent 42%,
-    color-mix(in srgb,#000 5%,transparent))}
+    color-mix(in srgb,#fff 14%,transparent),
+    transparent 46%,
+    color-mix(in srgb,#000 6%,transparent))}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
-  .tabbar{background:color-mix(in srgb,var(--bg) 97%,transparent)}
+  .tabbar{background:color-mix(in srgb,var(--bg) 96%,transparent)}
 }
-.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:22px;
-  color:var(--muted-2);font-family:var(--cond);font-weight:600;font-size:10px;letter-spacing:1px;
-  text-transform:uppercase;position:relative;transition:color .18s,background .18s,transform .12s}
-/* The selected tab is its own smaller lens sitting in the larger one. */
+/* Icons only. The labels were four words of chrome under four clear symbols
+   (Dylan); the name of the tab is on the screen you land on. */
+.tab{flex:1;display:flex;align-items:center;justify-content:center;padding:11px 4px;border-radius:999px;
+  color:var(--muted-2);position:relative;
+  transition:color .2s,background .2s,transform .34s cubic-bezier(.34,1.56,.64,1)}
+.tab-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .tab.active{color:var(--text);
-  background:color-mix(in srgb,var(--text) 6%,transparent);
-  box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 26%,transparent),
-             0 1px 3px -2px rgba(0,0,0,.25)}
+  background:color-mix(in srgb,var(--text) 8%,transparent);
+  box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 24%,transparent)}
 .tab.active svg{color:var(--brand)}
-.tab:active{transform:scale(.96)}
+/* Spring: overshoot on the way in, settle back. */
+.tab.active svg{animation:tabpop .42s cubic-bezier(.34,1.56,.64,1)}
+@keyframes tabpop{0%{transform:scale(.86)}55%{transform:scale(1.16)}100%{transform:scale(1)}}
+.tab:active{transform:scale(.92)}
+@media (prefers-reduced-motion:reduce){.tab.active svg{animation:none}.tab{transition:color .2s,background .2s}}
 .tab-badge{position:absolute;top:2px;right:50%;margin-right:-22px;min-width:17px;height:17px;border-radius:99px;
   background:var(--red);color:var(--on-red);font-size:10px;font-family:var(--sans);font-weight:700;display:grid;place-items:center;padding:0 4px}
 
@@ -1848,7 +1852,7 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
    warm near-black + paper + the shared terracotta spot. (theme key stays
    "navy" so no stored-state migration; only the look + label change.) ── */
 :root[data-theme="navy"]{
-  --bg:#14110D; --panel:#1E1A14; --panel-2:#26211A; --panel-3:#312A20;
+  --nav-tint:#fff; --nav-tint-o:12%; --bg:#14110D; --panel:#1E1A14; --panel-2:#26211A; --panel-3:#312A20;
   --line:rgba(239,231,216,.10); --line-2:rgba(239,231,216,.18);
   --text:#EFE7D8; --muted:#A99C88; --muted-2:#7B7160;
   --red:#E0714E; --green:#8FB073; --gold:#E0B25A; --amber:#D98A4A; --blue:#B29A7E; --purple:#B79E86;
@@ -1861,7 +1865,7 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
    "linen" so no stored-state migration; only the look + label change.) ── */
 :root[data-theme="linen"]{
   color-scheme:light;
-  --bg:#F2ECDF; --panel:#FBF6EA; --panel-2:#ECE2D0; --panel-3:#E0D4BE;
+  --nav-tint:#2A130B; --nav-tint-o:8%; --bg:#F2ECDF; --panel:#FBF6EA; --panel-2:#ECE2D0; --panel-3:#E0D4BE;
   --line:rgba(42,32,20,.13); --line-2:rgba(42,32,20,.24);
   --text:#1E1810; --muted:#6E6151; --muted-2:#9A8C78;
   --red:#9A3B2B; --green:#5E7449; --gold:#B0862C; --amber:#C08236; --blue:#7C6C57; --purple:#8A7360;
