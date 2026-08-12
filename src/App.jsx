@@ -760,8 +760,14 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .slot{position:relative;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--panel);
   overflow:hidden;aspect-ratio:1/1;display:flex;flex-direction:column;justify-content:flex-end;
   padding:12px;transition:border-color .15s}
+/* The camera sits in the middle of an empty tile, because that is where you
+   tap. In the corner it read as decoration (Miska). */
 .slot:not(.locked):hover{border-color:var(--line-2)}
-.slot .slot-ic{position:absolute;top:12px;left:12px;color:var(--muted)}
+/* Not absolute: a flex child that takes whatever height the label and hint
+   leave, so the camera centres in the empty part of the tile rather than in
+   the tile as a whole (Kyle). Titles run one to three lines; this follows. */
+.slot .slot-ic{position:static;flex:1;display:grid;place-items:center;
+  color:var(--muted-2);opacity:.5;pointer-events:none}
 .slot .slot-label{font-family:var(--cond);font-weight:600;font-size:14px;letter-spacing:.5px;z-index:2}
 .slot .slot-hint{font-size:11px;color:var(--muted);z-index:2;margin-top:1px}
 .slot .slot-thumb{position:absolute;inset:0}
@@ -904,7 +910,7 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 .ai-note .an-txt b{color:var(--amber)}
 
 .watertoggle{display:flex;align-items:center;gap:14px;margin-top:10px;padding:16px 18px;border-radius:var(--r);
-  border:1px solid var(--line);background:var(--water-bg);cursor:pointer;width:100%;text-align:left}
+  border:1px solid var(--line);background:var(--panel);cursor:pointer;width:100%;text-align:left}
 .watertoggle .wt-box{width:30px;height:30px;border-radius:9px;border:2px solid var(--line-2);display:grid;
   place-items:center;flex:none;transition:.15s}
 .watertoggle .wt-title{font-family:var(--cond);font-weight:600;font-size:15px}
@@ -937,8 +943,11 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
 /* Soft-mode Today hero (Linen layout) */
 .soft-hero{display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0 4px;text-align:center}
 .sh-ring{margin-top:2px}
-.sh-day{font-family:var(--title-font);font-size:34px;font-weight:600;fill:var(--text)}
-.sh-count{font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:2px;fill:var(--muted);text-transform:uppercase}
+/* The score fills the ring: it is the number that moves as you work. */
+.sh-score{font-family:var(--title-font);font-size:52px;font-weight:600;fill:var(--text)}
+.sh-of{font-family:var(--cond);font-size:20px;font-weight:600;fill:var(--muted)}
+/* And the day counter above it reads at a glance instead of as fine print. */
+.soft-hero > .section-label{font-size:14px;letter-spacing:2.5px;color:var(--muted)}
 .sh-line{font-size:14.5px;color:var(--muted);max-width:300px;line-height:1.5;margin:0}
 /* Day Complete celebration: above tabbar (40) + modal (60), below lightbox (90) */
 .dc-overlay{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;

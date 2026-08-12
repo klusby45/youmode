@@ -228,9 +228,9 @@ export default function Today() {
           <div className="slots-grid">
             {peekPhotos.slice(0, 4).map((r) => (
               <div key={r.id} className="slot preview">
-                <span className="slot-ic"><Icon name={r.icon || 'camera'} size={22} /></span>
+                <span className="slot-ic"><Icon name="camera" size={30} /></span>
                 <span className="slot-label">{r.label}</span>
-                <span className="slot-hint">{r.hint || 'Photo proof'}</span>
+                {r.hint && <span className="slot-hint">{r.hint}</span>}
               </div>
             ))}
           </div>
@@ -257,7 +257,6 @@ export default function Today() {
                 <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
                 {r.hint && <span className="wt-hint">{r.hint}</span>}
               </span>
-              <Icon name={r.icon || 'bolt'} size={22} style={{ color: 'var(--muted-2)' }} />
             </div>
           ))}
           {peekCadence.length > 0 && (
@@ -269,33 +268,63 @@ export default function Today() {
               <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
                 These show every day until you have completed them.
               </p>
+              {[...new Set(peekCadence.map(peekGroupOf).filter(Boolean))]
+                .filter((g) => peekCadence.filter((r) => peekGroupOf(r) === g).length > 1)
+                .map((g) => {
+                  const items = peekCadence.filter((r) => peekGroupOf(r) === g)
+                  return (
+                    <div key={g} className="grp">
+                      <div className="grp-head">
+                        <span className="grp-name">{g}</span>
+                        <span className="grp-count">0 of {items.length}</span>
+                      </div>
+                      {items.some((r) => r.kind === 'photo') && (
+                        <div className="slots-grid">
+                          {items.filter((r) => r.kind === 'photo').map((r) => (
+                            <div key={r.id} className="slot preview">
+                              <span className="slot-ic"><Icon name="camera" size={30} /></span>
+                              <span className="slot-label">{r.label}</span>
+                              {r.hint && <span className="slot-hint">{r.hint}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {items.some((r) => r.kind !== 'photo') && (
+                        <div className="grp-items" style={{ marginTop: 8 }}>
+                          {items.filter((r) => r.kind !== 'photo').map((r) => (
+                            <span key={r.id} className="grp-chip"><span className="gc-box" />{r.label}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               <div className="slots-grid">
-                {peekCadence.filter((r) => r.kind === 'photo').map((r) => (
+                {peekCadence.filter((r) => r.kind === 'photo' && !peekGroupOf(r)).map((r) => (
                   <div key={r.id} className="slot preview">
-                    <span className="slot-ic"><Icon name={r.icon || 'camera'} size={22} /></span>
+                    <span className="slot-ic"><Icon name="camera" size={30} /></span>
                     <span className="slot-label">{r.label}</span>
                     <span className="slot-hint">0 of {r.timesPerWeek || r.timesPerMonth || 1} this {r.frequency === 'monthly' ? 'month' : 'week'}</span>
                   </div>
                 ))}
               </div>
-              {peekCadence.filter((r) => r.kind === 'note').map((r) => (
+              {peekCadence.filter((r) => r.kind === 'note' && !peekGroupOf(r)).map((r) => (
                 <div key={r.id} className="noteline preview">
                   <div className="nl-head">
-                    <span className="nl-box"><Icon name="edit" size={13} /></span>
+                    <span className="nl-box" />
                     <span className="nl-title">{r.label}</span>
                   </div>
                   {r.hint && <div className="nl-q">{r.hint}</div>}
-                  <div className="nl-row"><span className="nl-in fr-input nl-ghost">Type your answer here</span></div>
+                  <div className="nl-row"><span className="nl-in fr-input nl-ghost">Jot down what you did</span></div>
                 </div>
               ))}
-              {peekCadence.filter((r) => r.kind !== 'photo' && r.kind !== 'note').map((r) => (
+              {peekCadence.filter((r) => r.kind !== 'photo' && r.kind !== 'note' && !peekGroupOf(r)).map((r) => (
                 <div key={r.id} className="watertoggle preview" style={{ marginBottom: 8 }}>
                   <span className="wt-box wt-count-box">0/{r.timesPerWeek || r.timesPerMonth || 1}</span>
                   <span style={{ flex: 1 }}>
                     <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
                     <span className="wt-hint">{r.hint || `${r.timesPerWeek || r.timesPerMonth || 1}× a ${r.frequency === 'monthly' ? 'month' : 'week'}`}</span>
                   </span>
-                  <Icon name={r.icon || 'bolt'} size={22} style={{ color: 'var(--muted-2)' }} />
                 </div>
               ))}
             </>
@@ -303,11 +332,11 @@ export default function Today() {
           {peekNotes.map((r) => (
             <div key={r.id} className="noteline preview">
               <div className="nl-head">
-                <span className="nl-box"><Icon name="edit" size={13} /></span>
+                <span className="nl-box" />
                 <span className="nl-title">{r.label}</span>
               </div>
               {r.hint && <div className="nl-q">{r.hint}</div>}
-              <div className="nl-row"><span className="nl-in fr-input nl-ghost">Type your answer here</span></div>
+              <div className="nl-row"><span className="nl-in fr-input nl-ghost">Jot down what you did</span></div>
             </div>
           ))}
         </div>
@@ -541,7 +570,6 @@ export default function Today() {
                   : (r.hint || '')}
               </span>
             </span>
-            <Icon name={r.icon || 'bolt'} size={22} style={{ color: on ? 'var(--blue)' : 'var(--muted-2)' }} />
           </button>
         )
       })}
@@ -642,7 +670,6 @@ export default function Today() {
                     <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
                     <span className="wt-hint" style={wp.met ? { color: 'var(--green)' } : undefined}>{busy ? 'Saving…' : `${badge}${onToday ? ' · logged today' : ''}`}</span>
                   </span>
-                  <Icon name={r.icon || 'bolt'} size={22} style={{ color: wp.met ? 'var(--green)' : 'var(--muted-2)' }} />
                 </button>
               )
             }
@@ -681,7 +708,6 @@ export default function Today() {
                     <span className="wt-title" style={{ display: 'block' }}>{r.label}</span>
                     <span className="wt-hint" style={mp.met ? { color: 'var(--green)' } : undefined}>{busy ? 'Saving…' : `${badge}${onToday ? ' · logged today' : ''}`}</span>
                   </span>
-                  <Icon name={r.icon || 'bolt'} size={22} style={{ color: mp.met ? 'var(--green)' : 'var(--muted-2)' }} />
                 </button>
               )
             }
@@ -772,7 +798,7 @@ export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, me
   const canPick = editable && (canAddMore || !req.multi) && IS_MOBILE
   const useMenu = filled && editable && !uploading
   const hint = uploading ? 'Uploading…'
-    : !filled ? (req.hint || 'Photo proof')
+    : !filled ? (req.hint || '')
     : useMenu ? 'Tap for options'
     : req.multi ? (canAddMore ? 'Tap to add another' : 'Full set')
     : 'Tap to retake'
@@ -788,7 +814,9 @@ export function PhotoSlot({ req, entry, editable, uploading, onPick, onClear, me
         setMenu(true)
       }}>
       {filled && <span className="slot-thumb"><ProofImage path={paths[paths.length - 1]} alt={req.label} /></span>}
-      {!filled && <span className="slot-ic"><Icon name={req.icon || 'camera'} size={22} /></span>}
+      {/* Always a camera. A running figure or a book on a photo tile was
+          decoration that made the tap target less obvious (Miska). */}
+      {!filled && <span className="slot-ic"><Icon name="camera" size={30} /></span>}
       {filled && !flagged && (
         <span className="slot-check">
           {req.multi && paths.length > 1
@@ -1054,7 +1082,9 @@ export function NoteLine({ req, entry, cfg, editable, previous, badge, onSave })
   return (
     <div className={'noteline' + (done ? ' done' : '')}>
       <div className="nl-head">
-        <span className="nl-box">{done ? <Icon name="check" size={14} strokeWidth={3} /> : <Icon name="edit" size={13} />}</span>
+        {/* A checkbox like every other row, not a pencil. It fills in when
+            there is something written, which is what completing this means. */}
+        <span className="nl-box">{done && <Icon name="check" size={14} strokeWidth={3} />}</span>
         <span className="nl-title">{req.label}</span>
         {badge && <span className="grp-count">{badge}</span>}
         <DueBadge req={req} entry={entry} cfg={cfg} />
@@ -1065,7 +1095,7 @@ export function NoteLine({ req, entry, cfg, editable, previous, badge, onSave })
       )}
       <div className="nl-row">
         <input className="fr-input nl-in" value={text} disabled={!editable || busy}
-          placeholder={done ? '' : 'A line is enough, as long as it is true'}
+          placeholder={done ? '' : 'Jot down what you did'}
           onFocus={() => setOpen(true)}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') save() }} />
@@ -1114,7 +1144,7 @@ function SoftHero({ dayNum, done, total, totalDays, complete, t }) {
       {/* The counter Kyle wanted kept, in the slot the ISO date was wasting.
           It left the header so the name and the avatar could breathe. */}
       <div className="section-label" style={{ margin: 0 }}>Day {dayNum} / {totalDays}</div>
-      <HeroRing done={done} total={total} dayNum={dayNum} />
+      <HeroRing done={done} total={total} />
       <p className="sh-line">
         {complete ? t('today.hero.done') : t('today.hero.encourage', { k: total - done, total })}
       </p>
@@ -1122,7 +1152,7 @@ function SoftHero({ dayNum, done, total, totalDays, complete, t }) {
   )
 }
 
-function HeroRing({ done, total, dayNum }) {
+function HeroRing({ done, total }) {
   const size = 190, sw = 10, r = size / 2 - sw - 2
   const c = 2 * Math.PI * r
   const off = c * (1 - (total ? done / total : 0))
@@ -1134,10 +1164,15 @@ function HeroRing({ done, total, dayNum }) {
       <circle cx={mid} cy={mid} r={r} fill="none" strokeWidth={sw} stroke={colr}
         strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off}
         style={{ transition: 'stroke-dashoffset .6s cubic-bezier(.2,.8,.2,1)' }} />
-      {/* .ring rotates -90deg; counter-rotate the text. Explicit y offsets, not
-          dominant-baseline (iOS Safari is unreliable with webfont metrics). */}
-      <text x={mid} y={mid - 4} textAnchor="middle" className="sh-day" transform={`rotate(90 ${mid} ${mid})`}>Day {dayNum}</text>
-      <text x={mid} y={mid + 26} textAnchor="middle" className="sh-count" transform={`rotate(90 ${mid} ${mid})`}>{done} of {total}</text>
+      {/* The day number moved above the ring, so the ring can show the one
+          thing that changes while you use it: how much of today is done. Big
+          enough to read at arm's length (Kyle).
+          .ring rotates -90deg, so counter-rotate the text. Explicit y offsets,
+          not dominant-baseline (iOS Safari is unreliable with webfont
+          metrics). */}
+      <text x={mid} y={mid + 14} textAnchor="middle" className="sh-score" transform={`rotate(90 ${mid} ${mid})`}>
+        {done}<tspan className="sh-of"> of </tspan>{total}
+      </text>
     </svg>
   )
 }
