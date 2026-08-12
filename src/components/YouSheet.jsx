@@ -11,6 +11,7 @@ export default function YouSheet({
   theme, onPickTheme, tone, onPickTone,
   sharing, onPickSharing, photoReqs = [], onToggleReq, showPrivacy = true,
   displayName, onSaveName,
+  timezone, challengeTimezone, dayEndHour, onSaveDayClock,
   email, onSaveEmail, onDeleteAccount, onEditChecklist, onNewChallenge, onExport, onClose,
 }) {
   return (
@@ -61,10 +62,90 @@ export default function YouSheet({
           photoReqs={photoReqs} onToggleReq={onToggleReq} />
       )}
 
+      {onSaveDayClock && (
+        <DayClock timezone={timezone} challengeTimezone={challengeTimezone}
+          dayEndHour={dayEndHour} onSave={onSaveDayClock} />
+      )}
       {onSaveName && <DisplayName name={displayName} onSave={onSaveName} />}
       {onSaveEmail && <RecoveryEmail email={email} onSave={onSaveEmail} />}
       {onDeleteAccount && <DeleteAccount onDelete={onDeleteAccount} />}
     </Sheet>
+  )
+}
+
+// Where you are, and when your day ends.
+//
+// Travel breaks a challenge-level timezone: hers was created in New York and
+// she is running it from Paris, then Tunisia, then Albania. And midnight is a
+// bad boundary for anyone whose night runs past it. Checking off "in bed by
+// 1am" at 12:45am should land on the night it belongs to, not the next day.
+const ZONES = (() => {
+  try { return Intl.supportedValuesOf('timeZone') } catch { return [] }
+})()
+const deviceZone = () => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone } catch { return null }
+}
+const zoneCity = (z) => (z || '').split('/').pop().replace(/_/g, ' ')
+
+function DayClock({ timezone, challengeTimezone, dayEndHour, onSave }) {
+  const here = deviceZone()
+  const effective = timezone || challengeTimezone
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  async function save(patch) {
+    setBusy(true); setMsg(null)
+    try { await onSave(patch); setMsg({ err: false, t: 'Saved' }) }
+    catch (e) { setMsg({ err: true, t: e.message }) }
+    finally { setBusy(false) }
+  }
+
+  // What time it is for them right now, so the setting is checkable at a glance
+  // rather than a name they have to trust.
+  let clock = ''
+  try {
+    clock = new Intl.DateTimeFormat('en-US', { timeZone: effective, hour: 'numeric', minute: '2-digit' }).format(new Date())
+  } catch { /* an unknown zone just shows nothing */ }
+
+  return (
+    <>
+      <div className="set-label"><Icon name="clock" size={13} />Your day</div>
+      <p className="muted" style={{ fontSize: 12, margin: '0 0 10px' }}>
+        {effective ? <>Currently {zoneCity(effective)}{clock ? `, where it's ${clock}` : ''}.</> : 'Set your timezone.'}
+      </p>
+
+      {here && here !== effective && (
+        <button className="btn btn-sm" style={{ width: '100%', marginBottom: 8 }} disabled={busy}
+          onClick={() => save({ timezone: here })}>
+          Use this phone's time ({zoneCity(here)})
+        </button>
+      )}
+
+      <select className="fr-input" style={{ width: '100%' }} value={timezone || ''} disabled={busy}
+        aria-label="Timezone"
+        onChange={(e) => save({ timezone: e.target.value })}>
+        <option value="">Follow the challenge ({zoneCity(challengeTimezone)})</option>
+        {ZONES.map((z) => <option key={z} value={z}>{z.replace(/_/g, ' ')}</option>)}
+      </select>
+
+      <p className="muted" style={{ fontSize: 12, margin: '14px 0 8px' }}>
+        My day ends at
+      </p>
+      <div className="de-row">
+        {[0, 1, 2, 3, 4, 5].map((h) => (
+          <button key={h} className={'de-chip' + ((dayEndHour || 0) === h ? ' on' : '')} disabled={busy}
+            onClick={() => save({ dayEndHour: h })}>
+            {h === 0 ? 'Midnight' : `${h}am`}
+          </button>
+        ))}
+      </div>
+      <p className="muted" style={{ fontSize: 12, margin: '8px 2px 0', lineHeight: 1.5 }}>
+        {(dayEndHour || 0) === 0
+          ? 'Anything after midnight counts toward the next day.'
+          : `Up until ${dayEndHour}am still counts as the day before, so a late night lands where it belongs.`}
+      </p>
+      {msg && <div className={msg.err ? 'login-err' : 'muted'} style={{ textAlign: 'left', fontSize: 12, marginTop: 6 }}>{msg.t}</div>}
+    </>
   )
 }
 

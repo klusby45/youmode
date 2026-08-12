@@ -191,16 +191,23 @@ export default function App() {
     if (!active) return null
     const c = active.challenge
     const parts = active.members.filter((m) => m.role === 'participant').length
+    // The day belongs to the person living it, not to the challenge's home
+    // city. Someone running theirs from Paris is on Paris time, and someone
+    // who goes to bed at 1am gets a boundary that is after they do.
+    const tz = me.timezone || c.timezone
+    const endHour = me.dayEndHour || 0
     return {
       startStr: c.startDate,
-      todayStr: todayInTz(c.timezone),
+      todayStr: todayInTz(tz, endHour),
       totalDays: c.totalDays,
-      timezone: c.timezone,
+      timezone: tz,
+      challengeTimezone: c.timezone,
+      dayEndHour: endHour,
       hasReferee: active.members.some((m) => m.role === 'referee'),
       format: c.format || deriveFormat(parts),
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, nowTick]) // nowTick keeps todayStr honest across midnight/resume
+  }, [active, nowTick, me.timezone, me.dayEndHour]) // nowTick keeps todayStr honest across the rollover
 
   // Member accents remap per colorway (identity on Midnight) — one mapping
   // point re-themes every inline style + SVG downstream.
@@ -413,6 +420,9 @@ export default function App() {
             showPrivacy={!isReferee}
             email={me.email}
             displayName={me.displayName}
+            timezone={me.timezone} challengeTimezone={active?.challenge?.timezone}
+            dayEndHour={me.dayEndHour}
+            onSaveDayClock={async (v) => { await api.saveDayClock(me.id, v); await refresh() }}
             onSaveName={async (v) => { await api.saveDisplayName(me.id, v); await refresh() }}
             onSaveEmail={async (v) => { await api.saveEmail(me.id, v); await refresh() }}
             onDeleteAccount={deleteAccount}
@@ -1010,6 +1020,10 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   background:rgba(0,0,0,.55);padding:1px 0}
 .pr-scrub{display:flex;align-items:center;gap:8px}
 .pr-scrub input{flex:1;accent-color:var(--brand)}
+.de-row{display:flex;flex-wrap:wrap;gap:6px}
+.de-chip{padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);
+  color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
+.de-chip.on{border-color:var(--brand);color:var(--text);background:var(--panel-2)}
 /* Photo options: what to do with a shot you already took. */
 .pm-wrap{position:fixed;inset:0;z-index:120;background:color-mix(in srgb,var(--scrim) 60%,transparent);
   display:flex;align-items:flex-end;justify-content:center;animation:pmfade .14s ease}

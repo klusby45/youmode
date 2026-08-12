@@ -19,6 +19,9 @@ const ACTIVE_KEY = '75hard-active-challenge'
 const nProfile = (r) => r && ({
   id: r.id, username: r.username, displayName: r.display_name, email: r.email, phone: r.phone,
   theme: r.theme ?? null, tone: r.tone ?? null,
+  // Their own clock. Null timezone follows the challenge; 0 is midnight.
+  // Both undefined pre-migration, which reads the same as the old behaviour.
+  timezone: r.timezone ?? null, dayEndHour: r.day_end_hour ?? 0,
   photoSharing: r.photo_sharing ?? null, // null = 'icons' (photos private by default)
 })
 const nChallenge = (r) => r && ({
@@ -127,6 +130,19 @@ export async function signUp({ username, password, email, phone = null }) {
   if (pe && /tone/i.test(pe.message || '')) ({ error: pe } = await supabase.from('profiles').insert(base))
   if (pe) throw pe
   return data.user.id
+}
+
+// Timezone and day rollover, per person. A clear error rather than a silent
+// no-op if the migration has not been pasted yet.
+export async function saveDayClock(userId, { timezone, dayEndHour }) {
+  const patch = {}
+  if (timezone !== undefined) patch.timezone = timezone || null
+  if (dayEndHour !== undefined) patch.day_end_hour = Math.max(0, Math.min(5, Number(dayEndHour) || 0))
+  const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
+  if (error && /timezone|day_end_hour|column/i.test(error.message || '')) {
+    throw new Error('Time settings need a quick server update. Ping Kyle.')
+  }
+  if (error) throw error
 }
 
 // Recovery email (stored on profile; used only for password reset + contact).

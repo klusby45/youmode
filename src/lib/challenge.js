@@ -11,13 +11,20 @@ import { isMealReq } from '../config.js'
 const MS_PER_DAY = 86_400_000
 
 // 'YYYY-MM-DD' for "now" in the given IANA timezone. en-CA renders ISO order.
-export function todayInTz(tz) {
+// Which day is it, for this person, right now.
+//
+// dayEndHour shifts the boundary out of midnight. At 12:45am with a 2am
+// rollover we look back two hours, land on 10:45pm, and return YESTERDAY's
+// date: which is the honest answer, because "in bed by 1am" belongs to the
+// night it started, not to the calendar page that just turned over.
+export function todayInTz(tz, dayEndHour = 0) {
+  const at = dayEndHour ? new Date(Date.now() - dayEndHour * 3600000) : new Date()
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: tz,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date())
+  }).format(at)
 }
 
 function toUTC(dateStr) {
