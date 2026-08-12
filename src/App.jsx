@@ -1512,6 +1512,19 @@ button.brand:active .brand-edit-ic{color:var(--brand);opacity:1}
   .oc-aura.live i{transform:translate(-50%,-50%) scale(1);opacity:.7;transition:none}}
 .oc-timer{font-family:var(--cond);font-weight:600;font-size:16px;letter-spacing:1px;color:var(--sun-text)}
 .oc-cancel{background:none;border:none;color:var(--sun-muted);font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+/* Onboarding chat step: fills the screen, one scroller, composer pinned. */
+.onb-wrap.oc-chat{display:flex;flex-direction:column;min-height:0;overflow:hidden;
+  padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+.onb-wrap.oc-chat .oc-msgs{flex:1;max-height:none;min-height:0;margin:6px 0 10px}
+.onb-wrap.oc-chat .oc-chatbar,.onb-wrap.oc-chat .auth-flip{flex:none}
+.oc-mic-sm{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--lpc-line);background:var(--lpc-card);color:var(--lpc-mut);cursor:pointer}
+.oc-mic-sm:disabled{opacity:.45}
+.oc-mic-sm.rec{background:var(--lpc-red);border-color:var(--lpc-red);color:#fff;
+  animation:mic-pulse 1.1s ease-in-out infinite}
+.oc-rec-line{font-size:12px;color:var(--lpc-mut);text-align:center;margin:8px 0 0}
+.sun-scope .oc-mic-sm{border-color:var(--sun-line);background:var(--sun-card);color:var(--sun-muted)}
+.sun-scope .oc-rec-line{color:var(--sun-muted)}
 .oc-chatbar{display:flex;gap:8px;align-items:flex-end}
 .oc-chatbar textarea{flex:1;background:var(--sun-card);border:1px solid var(--sun-line);border-radius:14px;
   padding:12px 14px;color:var(--sun-text);font:inherit;font-size:15px;line-height:1.4;resize:none}

@@ -93,6 +93,7 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
   const auraRef = useRef(null) // the glow element the level drives
   const scrollRef = useRef(null)
   const rambleTaRef = useRef(null)
+  const wrapRef = useRef(null)
 
   // Stop any live recording + timer if the screen unmounts mid-capture.
   useEffect(() => () => {
@@ -104,7 +105,31 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [msgs, busy])
+  }, [msgs, busy, recState])
+
+  // The chat step is pinned to the VISUAL viewport, so an open keyboard
+  // shrinks the conversation instead of shoving the composer off the bottom.
+  // Same trick the goal coach uses; without it the message list was a 52vh box
+  // scrolling inside a page that also scrolled, which is two scrollbars
+  // fighting over one thumb.
+  useEffect(() => {
+    if (step !== 'interview') { if (wrapRef.current) { wrapRef.current.style.height = ''; wrapRef.current.style.transform = '' } return }
+    const vv = window.visualViewport
+    const fit = () => {
+      const el = wrapRef.current
+      if (!el || !vv) return
+      el.style.height = `${vv.height}px`
+      el.style.transform = `translateY(${vv.offsetTop}px)`
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
+    }
+    fit()
+    vv?.addEventListener('resize', fit)
+    vv?.addEventListener('scroll', fit)
+    return () => {
+      vv?.removeEventListener('resize', fit)
+      vv?.removeEventListener('scroll', fit)
+    }
+  }, [step])
 
   // Keep the in-progress session on disk (cleared when the challenge is created).
   useEffect(() => {
@@ -418,7 +443,7 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
   return (
     <div className={'lin' + (inkScreen ? ' oc-ink' : '')}>
       <div className="lin-bg" />
-      <div className="onb-wrap">
+      <div className={'onb-wrap' + (step === 'interview' ? ' oc-chat' : '')} ref={wrapRef}>
         <header className="au-top">
           <span className="au-brand">
             <img className="au-logo" src="/logo-96.png" alt="" />
@@ -488,12 +513,27 @@ export default function OnboardCoach({ profile, onDone, signOut, onCancel, theme
               {busy && <div className="cm ai thinking">thinking…</div>}
             </div>
             {err && <div className="login-err" style={{ textAlign: 'left' }}>{err}</div>}
+            {/* Talking is how this screen starts, so it should be how it
+                continues. The recorder already appends into the same box the
+                keyboard types into, so answering out loud is the same gesture
+                one step later (Miska). */}
             <div className="oc-chatbar">
-              <textarea value={input} rows={2} placeholder="Type your answer…" disabled={busy}
+              {recState === 'recording' ? (
+                <button className="oc-mic-sm rec" onClick={stopRec} aria-label="Stop recording"><Icon name="stop" size={16} /></button>
+              ) : (
+                <button className="oc-mic-sm" onClick={startRec} aria-label="Talk instead of typing"
+                  disabled={busy || recState === 'transcribing'}><Icon name="mic" size={18} /></button>
+              )}
+              <textarea value={input} rows={2} placeholder={recState === 'idle' ? 'Type or tap the mic…' : ''} disabled={busy}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
-              <button className="btn btn-accent oc-send" disabled={busy || !input.trim()} onClick={send} aria-label="Send"><Icon name="chevron" size={18} /></button>
+              <button className="btn btn-accent oc-send" disabled={busy || !input.trim() || recState !== 'idle'} onClick={send} aria-label="Send"><Icon name="chevron" size={18} /></button>
             </div>
+            {recState !== 'idle' && (
+              <div className="oc-rec-line">
+                {recState === 'recording' ? <>Listening · {mmss} · tap the square when you're done</> : 'Writing it down…'}
+              </div>
+            )}
             <button className="auth-flip" onClick={() => setManual(true)}>Prefer to set it up yourself?</button>
           </>
         )}
